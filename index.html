@@ -1338,7 +1338,7 @@ function PopnGame() {
   // ================================================================
   // GAME OVER画面
   // ================================================================
-  if (gs === "gameover") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}},
+  if (gs === "gameover") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",padding:"20px 0"}},
     charSprites[3] && h("div", {style:{marginBottom:30}},
       h("img", {src:charSprites[3], style:{width:"216px",height:"216px",objectFit:"contain"}})
     ),
