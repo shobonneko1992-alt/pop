@@ -1207,7 +1207,7 @@ function PopnGame() {
         h("div", null,
           h("div", {style:{color:"#4a2278",fontSize:10,letterSpacing:3}}, "SCORE"),
           h("div", {style:{color:"#fff",fontSize:"clamp(18px,4vw,28px)",fontWeight:800,fontFamily:"monospace",letterSpacing:2}}, score.toLocaleString().padStart(8,"0")),
-          (isMissChar ? charSprites[1] : charSprites[2]) && h("div", {style:{width:52,height:52,marginTop:6}},
+          (isMissChar ? charSprites[1] : charSprites[2]) && h("div", {style:{width:52,height:52,marginTop:16}},
             h("img", {src:(isMissChar ? charSprites[1] : charSprites[2]), style:{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
           )
         ),
