@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"/>
+  <title>POP★BEAT</title>
+  <style>
+    :root{--app-h:100vh;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;}
+    body{background:#0a0010;overflow:hidden;font-family:'Segoe UI','Hiragino Kaku Gothic ProN',sans-serif;}
+    @keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-12px)}}
+    @keyframes laneFlashAnim{0%{opacity:1}100%{opacity:0}}
+    @keyframes scrollGrid{from{background-position:0 0}to{background-position:0 40px}}
+    @keyframes judgePop{
+      0%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}
+      30%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+      70%{opacity:1;transform:translate(-50%,-60%) scale(1)}
+      100%{opacity:0;transform:translate(-50%,-70%) scale(0.9)}
+    }
+    @keyframes rainbowMove{
+      0%{background-position:0% 50%}
+      100%{background-position:200% 50%}
+    }
+    @keyframes charWave{
+      0%{transform:rotate(0deg) translateY(0)}
+      25%{transform:rotate(-10deg) translateY(-5px)}
+      50%{transform:rotate(10deg) translateY(0)}
+      75%{transform:rotate(-10deg) translateY(-5px)}
+      100%{transform:rotate(0deg) translateY(0)}
+    }
+    @keyframes charDance{
+      0%{transform:scale(1) translateY(0) rotate(0deg)}
+      25%{transform:scale(1.02) translateY(-10px) rotate(-5deg)}
+      50%{transform:scale(1) translateY(0) rotate(0deg)}
+      75%{transform:scale(1.02) translateY(-10px) rotate(5deg)}
+      100%{transform:scale(1) translateY(0) rotate(0deg)}
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  // モバイルブラウザのアドレスバー分だけ100vhが実際の表示領域より
+  // 大きくなり、下部のボタンが見切れる問題への対策。
+  // 実際の表示高さ(px)を --app-h に反映し、リサイズ時にも更新する。
+  (function () {
+    function setAppHeight() {
+      var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+      document.documentElement.style.setProperty('--app-h', h + 'px');
+    }
+    setAppHeight();
+    window.addEventListener('resize', setAppHeight);
+    window.addEventListener('orientationchange', setAppHeight);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', setAppHeight);
+    }
+  })();
+</script>
+<script src="images/char.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script>
+const {useState,useEffect,useRef,useCallback,createElement:h} = React;
+
+// ================================================================
+// 🎵 BGM設定（ファイルは各ステージ開始時に選択）
+// ================================================================
+const DEFAULT_TRACK = { file: null, fileName: null, bpm: 128, path: null };
+
+const BASE_TRAVEL_MS = 5200;
+const HIT_ZONE_Y     = 88;
+
+const LANES_5K = [
+  {key:"a",label:"A",color:"#FF3FA4",glow:"#FF3FA455"},
+  {key:"s",label:"S",color:"#FFD600",glow:"#FFD60055"},
+  {key:"d",label:"D",color:"#00E5FF",glow:"#00E5FF55"},
+  {key:"f",label:"F",color:"#69FF47",glow:"#69FF4755"},
+  {key:"g",label:"G",color:"#FF6D00",glow:"#FF6D0055"},
+];
+const LANES_3K = [
+  {key:"a",label:"A",color:"#FF3FA4",glow:"#FF3FA455"},
+  {key:"d",label:"D",color:"#00E5FF",glow:"#00E5FF55"},
+  {key:"g",label:"G",color:"#FF6D00",glow:"#FF6D0055"},
+];
+
+const SPEED_OPTIONS = [
+  {label:"×0.5",value:0.5},{label:"×0.75",value:0.75},{label:"×1.0",value:1.0},
+  {label:"×1.5",value:1.5},{label:"×2.0",value:2.0},
+];
+const LEVEL_OPTIONS = [
+  {label:"Lv.1",value:1,desc:"かんたん"},{label:"Lv.2",value:2,desc:"ふつう"},
+  {label:"Lv.3",value:3,desc:"むずかしい"},{label:"Lv.4",value:4,desc:"エキスパート"},
+  {label:"Lv.5",value:5,desc:"MAX"},
+];
+const LEVEL_COLORS = ["#69FF47","#00E5FF","#FFD600","#FF6D00","#FF3FA4"];
+const LEVEL_DARKS  = ["#00c830","#0088cc","#cc9900","#cc3300","#aa0066"];
+
+const CHARTS_5K = {
+  1:[[0,2],[8,0],[16,4]],
+  2:[[0,2],[4,0],[8,4],[12,2],[16,0]],
+  3:[[0,2],[2,0],[4,4],[6,2],[8,1],[10,3],[12,0],[14,2],[16,4],[18,1]],
+  4:[[0,2],[1,0],[2,4],[3,2],[4,1],[5,3],[6,0],[7,2],[8,4],[9,1],[10,3],[11,0],[12,2],[13,4],[14,1],[15,3],[16,0],[17,2],[18,4],[19,1]],
+  5:[[0,2],[0.5,0],[1,4],[2,2],[3,1],[3.5,3],[4,0],[5,2],[5.5,4],[6,1],[7,3],[7.5,0],[8,2],[9,4],[9.5,1],[10,3],[11,0],[11.5,2],[12,4],[13,1],[13.5,3],[14,0],[15,2],[15.5,4],[16,1],[17,3],[17.5,0],[18,2],[19,4],[19.5,1]],
+};
+const CHARTS_3K = {
+  1:[[0,1],[8,0],[16,2]],
+  2:[[0,1],[4,0],[8,2],[12,1],[16,0]],
+  3:[[0,1],[2,0],[4,2],[6,1],[8,0],[10,2],[12,1],[14,0],[16,2],[18,1]],
+  4:[[0,1],[1,0],[2,2],[3,1],[4,0],[5,2],[6,1],[7,0],[8,2],[9,1],[10,0],[11,2],[12,1],[13,0],[14,2],[15,1],[16,0],[17,2],[18,1],[19,0]],
+  5:[[0,1],[0.5,0],[1,2],[2,1],[3,0],[3.5,2],[4,1],[5,0],[5.5,2],[6,1],[7,0],[7.5,2],[8,1],[9,0],[9.5,2],[10,1],[11,0],[11.5,2],[12,1],[13,0],[13.5,2],[14,1],[15,0],[15.5,2],[16,1],[17,0],[17.5,2],[18,1],[19,0],[19.5,2]],
+};
+
+function buildChart(mode, level, targetBeats) {
+  const baseBeatsLen = 20; // 1ループの基本拍数
+  const fallbackTarget = 100; // 未指定時のデフォルト（100拍）
+  const target = targetBeats || fallbackTarget;
+  const numLanes = mode === "3K" ? 3 : 5;
+  const charts = mode === "3K" ? CHARTS_3K : CHARTS_5K;
+  const base = charts[level] ?? charts[1];
+  const chart = [];
+  let currentRep = 0;
+  let prevLane = -1;
+  
+  while (currentRep * baseBeatsLen < target) {
+    const shiftAmt = Math.floor(Math.random() * numLanes);
+
+    base.forEach(([beat, originalLane]) => {
+      const actualBeat = beat + currentRep * baseBeatsLen;
+      if (actualBeat <= target) {
+        let actualLane = originalLane;
+        
+        // 最初のループ以降はレーン配置にランダム性を持たせる
+        if (currentRep > 0) {
+          const rand = Math.random();
+          if (rand < 0.25 && prevLane !== -1) {
+            // 25%の確率で前のノーツと同じレーン（同じ色の連続）
+            actualLane = prevLane;
+          } else if (rand < 0.6) {
+            // 35%の確率で完全ランダム
+            actualLane = Math.floor(Math.random() * numLanes);
+          } else {
+            // 40%の確率でパターンをベースに全体をシフトさせたもの
+            actualLane = (originalLane + shiftAmt) % numLanes;
+          }
+        }
+        
+        chart.push({beat: actualBeat, lane: actualLane, id:`${currentRep}-${beat}-${Math.random()}`});
+        prevLane = actualLane;
+      }
+    });
+    currentRep++;
+  }
+  return chart.sort((a, b) => a.beat - b.beat);
+}
+
+async function analyzeBPM(urlOrFile) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    let arrayBuffer;
+    if (typeof urlOrFile === "string") {
+      const response = await fetch(urlOrFile);
+      arrayBuffer = await response.arrayBuffer();
+    } else if (urlOrFile instanceof File || urlOrFile instanceof Blob) {
+      arrayBuffer = await urlOrFile.arrayBuffer();
+    } else {
+      return 130;
+    }
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    const sampleRate = audioBuffer.sampleRate;
+    const data = audioBuffer.getChannelData(0);
+    
+    // 最初の40秒に限定して解析速度とBPM判定の精度を向上
+    const maxSamples = Math.min(data.length, sampleRate * 40);
+    const step = 4;
+    
+    // 音量に応じた動的なしきい値設定 (全体の最大音量の70%)
+    let maxVal = 0;
+    for (let i = 0; i < maxSamples; i += 100) {
+      if (Math.abs(data[i]) > maxVal) maxVal = Math.abs(data[i]);
+    }
+    let threshold = maxVal * 0.7;
+    if (threshold < 0.15) threshold = 0.2; // 極端に静かな曲対策
+    
+    let peaks = [];
+    for (let i = 0; i < maxSamples; i += step) {
+      if (Math.abs(data[i]) > threshold) {
+        peaks.push(i);
+        // 音ゲーに多いアップテンポ（BPM 240相当）を考慮して最小間隔を0.25秒に制限
+        i += sampleRate * 0.25; 
+      }
+    }
+    
+    // ピークが少なすぎる場合は閾値を下げて再試行
+    if (peaks.length < 12) {
+      threshold = maxVal * 0.45;
+      peaks = [];
+      for (let i = 0; i < maxSamples; i += step) {
+        if (Math.abs(data[i]) > threshold) {
+          peaks.push(i);
+          i += sampleRate * 0.25;
+        }
+      }
+    }
+    
+    if (peaks.length < 2) return 130;
+    
+    // ピーク間の間隔を集計
+    let intervals = [];
+    for (let i = 1; i < peaks.length; i++) {
+      intervals.push(peaks[i] - peaks[i - 1]);
+    }
+    
+    // 各間隔をBPMに変換し、テンポの最頻値を算出する
+    const bpms = intervals.map(interval => {
+      const duration = interval / sampleRate;
+      let b = 60 / duration;
+      if (b <= 0) return 0;
+      // 95 〜 190 の基本テンポ範囲に一旦マッピング
+      while (b < 95) b *= 2;
+      while (b > 190) b /= 2;
+      return Math.round(b);
+    }).filter(b => b > 0);
+    
+    if (bpms.length === 0) return 130;
+    
+    // 最頻値 (Mode) の集計
+    const counts = {};
+    let maxCount = 0;
+    let modeBpm = 130;
+    bpms.forEach(b => {
+      const rounded = Math.round(b);
+      counts[rounded] = (counts[rounded] || 0) + 1;
+      if (counts[rounded] > maxCount) {
+        maxCount = counts[rounded];
+        modeBpm = rounded;
+      }
+    });
+    
+    // アップテンポな曲 (最大240) までを適正カバー
+    let finalBpm = modeBpm;
+    if (finalBpm < 90) finalBpm *= 2;
+    if (finalBpm > 240) finalBpm /= 2;
+    
+    return Math.round(finalBpm);
+  } catch (e) {
+    console.error("BPM analysis failed:", e);
+    return 130;
+  }
+}
+
+function jColor(label) {
+  return {COOL:"#FFD600", GREAT:"#00E5FF", GOOD:"#69FF47", MISS:"#FF3FA4"}[label] ?? "#fff";
+}
+
+let globalAudioCtx = null;
+function playBeep(freq) {
+  try {
+    if (!globalAudioCtx) {
+      globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (globalAudioCtx.state === "suspended") {
+      globalAudioCtx.resume();
+    }
+    const ctx = globalAudioCtx;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq || 440, ctx.currentTime);
+    g.gain.setValueAtTime(0.08, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+    o.start();
+    o.stop(ctx.currentTime + 0.08);
+  } catch (e) {
+    console.error("playBeep error:", e);
+  }
+}
+
+// ================================================================
+// DB Utility (IndexedDB for storing custom audio files)
+// ================================================================
+const DB_NAME = "PopnDB";
+const STORE_NAME = "audioFiles";
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => { e.target.result.createObjectStore(STORE_NAME); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function saveAudioFile(name, arrayBuffer) {
+  return initDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put(arrayBuffer, name);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+function getAudioFile(name) {
+  return initDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).get(name);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(tx.error);
+  }));
+}
+
+function getAudioFileList() {
+  return initDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).getAllKeys();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(tx.error);
+  }));
+}
+
+const getAudioSrc = async (fileName) => {
+  if (!fileName) return { url: "", isBlob: false };
+  try {
+    const buf = await getAudioFile(fileName);
+    if (buf) {
+      return { url: URL.createObjectURL(new Blob([buf])), isBlob: true };
+    }
+  } catch(e) {}
+  return { url: "フリーBGM/" + fileName, isBlob: false };
+};
+
+
+
+// ================================================================
+// メインコンポーネント
+// ================================================================
+function PopnGame() {
+  const [gs,       setGs]       = useState("idle");
+  const [mode,     setMode]     = useState("5K");
+  const [speed,    setSpeed]    = useState(1.0);
+  const [level,    setLevel]    = useState(1);
+  const [track,    setTrack]    = useState(DEFAULT_TRACK);
+  const [score,    setScore]    = useState(0);
+  const [combo,    setCombo]    = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+  const [judg,     setJudg]     = useState(null);
+  const [notes,    setNotes]    = useState([]);
+  const [pressed,  setPressed]  = useState({});
+  const [counts,   setCounts]   = useState({GREAT:0,GOOD:0,MISS:0});
+  const [health,   setHealth]   = useState(50);
+  const [timer,    setTimer]    = useState(0);
+  const [lf,       setLf]       = useState({});
+  const [customSongs, setCustomSongs] = useState(() => {
+    try { const s = localStorage.getItem("popn_custom"); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  const [isMeasuringBpm, setIsMeasuringBpm] = useState(false);
+  
+  // カスタマイズ用ステート
+  const [custName, setCustName] = useState("");
+  const [custBpm, setCustBpm] = useState(128);
+  const [custFile, setCustFile] = useState("");
+  const [availableFiles, setAvailableFiles] = useState([]);
+  const [recChart, setRecChart] = useState([]);
+  const recStartRef = useRef(0);
+  
+  // エディタ用ステート追加
+  const [editorDuration, setEditorDuration] = useState(60);
+  const [editorTime, setEditorTime] = useState(0);
+  const [isPlayingEditor, setIsPlayingEditor] = useState(false);
+  const editorAudioRef = useRef(null);
+  const editorRafRef = useRef(null);
+  const editorScrollRef = useRef(null);
+  const [editorAudioUrl, setEditorAudioUrl] = useState("");
+  const [beatHeight, setBeatHeight] = useState(160);
+
+  // 再生中の時刻更新ループ
+  useEffect(() => {
+    if (gs === "editor" && isPlayingEditor && editorAudioRef.current) {
+      const update = () => {
+        if(editorAudioRef.current) {
+          setEditorTime(editorAudioRef.current.currentTime);
+        }
+        editorRafRef.current = requestAnimationFrame(update);
+      };
+      editorRafRef.current = requestAnimationFrame(update);
+    } else {
+      cancelAnimationFrame(editorRafRef.current);
+    }
+    return () => cancelAnimationFrame(editorRafRef.current);
+  }, [gs, isPlayingEditor]);
+
+  // 時刻や倍率変更に応じたスクロール追従
+  useEffect(() => {
+    if (gs === "editor" && editorScrollRef.current) {
+      const scrollDiv = editorScrollRef.current;
+      const yFromBottom = (editorTime / 60) * custBpm * beatHeight;
+      const headY = scrollDiv.scrollHeight - yFromBottom;
+      if (headY > scrollDiv.scrollTop + scrollDiv.clientHeight - 100 || headY < scrollDiv.scrollTop + 100) {
+        scrollDiv.scrollTop = headY - scrollDiv.clientHeight / 2;
+      }
+    }
+  }, [editorTime, beatHeight, gs, custBpm]);
+
+  // エディタを開いた時に一番下（0秒地点）にスクロールする
+  useEffect(() => {
+    if (gs === "editor" && editorScrollRef.current) {
+      setTimeout(() => {
+        if (editorScrollRef.current) {
+          editorScrollRef.current.scrollTop = editorScrollRef.current.scrollHeight;
+        }
+      }, 50);
+    }
+  }, [gs]);
+
+  // エディタ用の音声URLを非同期で準備する（DBからの読み込み等）
+  useEffect(() => {
+    let urlObj = null;
+    let active = true;
+    if (gs === "editor" && custFile) {
+      getAudioSrc(custFile).then(res => {
+        if (active) {
+          urlObj = res;
+          setEditorAudioUrl(res.url);
+        } else if (res.isBlob) {
+          URL.revokeObjectURL(res.url);
+        }
+      });
+    }
+    return () => {
+      active = false;
+      if (urlObj && urlObj.isBlob) URL.revokeObjectURL(urlObj.url);
+      setEditorAudioUrl("");
+    };
+  }, [gs, custFile]);
+
+  const [isMissChar, setIsMissChar] = useState(false);
+  const missCharTidRef = useRef(null);
+
+  const [stage,    setStage]    = useState(1);
+  const [history,  setHistory]  = useState([]);
+  
+  // キャラクター画像のスプライト（左上、右上、左下、右下）
+  const [charSprites, setCharSprites] = useState([]);
+
+  useEffect(() => {
+    if (typeof CHAR_B64 === "undefined") {
+      console.error("char.js is not loaded");
+      return;
+    }
+    const loadAndProcess = (src, index) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const w = img.width;
+        const h = img.height;
+        canvas.width = w; canvas.height = h;
+        ctx.drawImage(img, 0, 0);
+        
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const data = imgData.data;
+
+        const isBg = (idx) => {
+          const r = data[idx], g = data[idx+1], b = data[idx+2];
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          return (r > 245 && g > 245 && b > 245) || (r > 210 && g > 210 && b > 210 && (max - min) < 20);
+        };
+
+        const stack = [];
+        const visited = new Uint8Array(w * h);
+        for (let x = 0; x < w; x++) { stack.push([x, 0]); stack.push([x, h - 1]); }
+        for (let y = 0; y < h; y++) { stack.push([0, y]); stack.push([w - 1, y]); }
+
+        while(stack.length > 0) {
+          const [x, y] = stack.pop();
+          if (x < 0 || x >= w || y < 0 || y >= h) continue;
+          const p = y * w + x;
+          if (visited[p]) continue;
+          visited[p] = 1;
+          
+          const idx = p * 4;
+          if (isBg(idx)) {
+            data[idx+3] = 0;
+            stack.push([x+1, y], [x-1, y], [x, y+1], [x, y-1]);
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        setCharSprites(prev => {
+          const arr = [...prev];
+          arr[index] = canvas.toDataURL("image/png");
+          return arr;
+        });
+      };
+      img.src = src;
+    };
+    
+    loadAndProcess(CHAR_B64, 0);
+    loadAndProcess(CHER_B64, 1);
+    loadAndProcess(CHER2_B64, 2);
+    loadAndProcess(CHER4_B64, 3);
+  }, []);
+
+  const bgmRef      = useRef(null);
+  const chartRef    = useRef([]);
+  const chartIdxRef = useRef(0);
+  const activeRef   = useRef([]);
+  const rafRef      = useRef(null);
+  const scoreRef    = useRef(0);
+  const comboRef    = useRef(0);
+  const maxComboRef = useRef(0);
+  const countsRef   = useRef({GREAT:0,GOOD:0,MISS:0});
+  const healthRef   = useRef(50);
+  const gsRef       = useRef("idle");
+  const noteIdRef   = useRef(0);
+  const laneRefs    = useRef([]);
+  const startRef    = useRef(0);
+  const beatMsRef   = useRef(60000 / 128);
+  const speedRef    = useRef(1.0);
+  const trackRef    = useRef(DEFAULT_TRACK);
+
+  const stageRef    = useRef(1);
+  const historyRef  = useRef([]);
+  const startHpRef  = useRef(50);
+
+  useEffect(() => { gsRef.current = gs; }, [gs]);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { trackRef.current = track; }, [track]);
+
+  // カスタマイズ画面を開いた時にフリーBGMフォルダ内のファイル一覧を取得する
+  useEffect(() => {
+    if (gs === "customize") {
+      const fetchLocal = fetch("フリーBGM/")
+        .then(r => r.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, "text/html");
+          const links = Array.from(doc.querySelectorAll("a"));
+          return links.map(a => {
+            let href = decodeURIComponent(a.getAttribute("href"));
+            if(href.endsWith("/")) href = href.slice(0, -1);
+            return href;
+          }).filter(href => href.toLowerCase().match(/\.(mp3|wav|ogg|m4a)$/));
+        }).catch(() => []);
+
+      const fetchDB = getAudioFileList().catch(() => []);
+
+      Promise.all([fetchLocal, fetchDB]).then(([localFiles, dbFiles]) => {
+        const files = Array.from(new Set([...localFiles, ...dbFiles]));
+        setAvailableFiles(files);
+        setCustFile(prev => {
+          if (!prev && files.length > 0) {
+            setCustName(files[0].replace(/^imported_/, "").replace(/\.[^/.]+$/, ""));
+            return files[0];
+          }
+          return prev;
+        });
+      });
+    }
+  }, [gs]);
+
+  // ── BGMファイルをアップロード ──────────────────────────────────────
+  const handleFileChange = useCallback(async (e) => {
+    const file = e.target.files[0];
+    if (!file) {
+      setTrack(DEFAULT_TRACK);
+      return;
+    }
+    setTrack(prev => ({...prev, file, fileName: file.name, path: null, bpm: "..."}));
+    setIsMeasuringBpm(true);
+    const url = URL.createObjectURL(file);
+    const bpm = await analyzeBPM(url);
+    if(bpm) setTrack(prev => ({...prev, bpm}));
+    else setTrack(prev => ({...prev, bpm: 128}));
+    setIsMeasuringBpm(false);
+  }, []);
+
+  const handlePresetSelect = useCallback(async (fileName, path) => {
+    setTrack({file: null, fileName, path, bpm: "..."});
+    setIsMeasuringBpm(true);
+    const bpm = await analyzeBPM(path);
+    if(bpm) setTrack(prev => ({...prev, bpm}));
+    else setTrack(prev => ({...prev, bpm: 128}));
+    setIsMeasuringBpm(false);
+  }, []);
+
+  // ── BPM入力は手動では行わず自動測定のみにするため削除 ──
+
+  // ── BGM停止 ───────────────────────────────────────────────────────
+  const stopBGM = useCallback(() => {
+    if (bgmRef.current) { bgmRef.current.stop(); bgmRef.current = null; }
+  }, []);
+
+  // ── ゲームループ ───────────────────────────────────────────────────
+  const gameLoop = useCallback(() => {
+    if (gsRef.current !== "playing") return;
+    const elapsed  = performance.now() - startRef.current;
+    const travelMs = BASE_TRAVEL_MS / speedRef.current;
+
+    while (chartIdxRef.current < chartRef.current.length) {
+      const {beat, lane, id} = chartRef.current[chartIdxRef.current];
+      if (beat * beatMsRef.current - elapsed <= travelMs) {
+        activeRef.current.push({id, lane, hitTime: beat * beatMsRef.current, missed: false});
+        chartIdxRef.current++;
+      } else break;
+    }
+
+    activeRef.current = activeRef.current.map(n => {
+      const y = (elapsed - (n.hitTime - travelMs)) / travelMs * HIT_ZONE_Y;
+      if (!n.missed && n.y !== undefined && n.y > 94) {
+        n.missed = true; comboRef.current = 0; setCombo(0);
+        countsRef.current.MISS++; setCounts({...countsRef.current});
+        setJudg({label:"MISS", id: noteIdRef.current++, lane: n.lane});
+        healthRef.current = Math.max(0, healthRef.current - 15); setHealth(healthRef.current);
+        
+        setIsMissChar(true);
+        if (missCharTidRef.current) clearTimeout(missCharTidRef.current);
+        missCharTidRef.current = setTimeout(() => setIsMissChar(false), 1000);
+
+        if (healthRef.current <= 0) { stopBGM(); setGs("gameover"); gsRef.current = "gameover"; }
+      }
+      return {...n, y};
+    });
+
+    activeRef.current = activeRef.current.filter(n => n.y < 120);
+    setNotes([...activeRef.current]);
+    setTimer(elapsed / 1000);
+
+    if (chartIdxRef.current >= chartRef.current.length && activeRef.current.length === 0) {
+      stopBGM();
+      const tNotes = chartRef.current.length || 1;
+      const acc = ((countsRef.current.GREAT * 100 + countsRef.current.GOOD * 70) / (tNotes * 100) * 100).toFixed(1);
+      const ag = countsRef.current.GOOD === 0 && countsRef.current.MISS === 0 && countsRef.current.GREAT > 0;
+      const rk = ag ? "S" : acc >= 85 ? "A" : acc >= 70 ? "B" : acc >= 50 ? "C" : "D";
+      historyRef.current.push({
+        stage: stageRef.current, score: scoreRef.current, counts: {...countsRef.current}, maxCombo: maxComboRef.current, accuracy: acc, rank: rk
+      });
+      setHistory([...historyRef.current]);
+
+      if (stageRef.current < 3) {
+        setGs("stage_result"); gsRef.current = "stage_result";
+      } else {
+        setGs("stage_result"); gsRef.current = "stage_result";
+      }
+      return;
+    }
+    rafRef.current = requestAnimationFrame(gameLoop);
+  }, [stopBGM]);
+
+  // ── ゲーム開始 ─────────────────────────────────────────────────────
+  const startGame = useCallback((m, lv, sp, customSong = null) => {
+    stopBGM();
+    const currentTrack = customSong ? {fileName: customSong.fileName, bpm: customSong.bpm} : trackRef.current;
+    beatMsRef.current = 60000 / currentTrack.bpm;
+
+    const startPlaying = (durationSec) => {
+      const travelMs = BASE_TRAVEL_MS / sp;
+      
+      if (customSong && customSong.chart) {
+        chartRef.current = customSong.chart.filter(n => n.beat * beatMsRef.current >= travelMs);
+      } else {
+        const targetBeats = durationSec ? Math.max(30, Math.ceil((durationSec / 60) * currentTrack.bpm)) : 100;
+        chartRef.current = buildChart(m, lv, targetBeats).filter(
+          n => n.beat * beatMsRef.current >= 2000 + travelMs
+        );
+      }
+      chartIdxRef.current = 0; activeRef.current = [];
+      scoreRef.current = 0; comboRef.current = 0; maxComboRef.current = 0; healthRef.current = startHpRef.current;
+      countsRef.current = {GREAT:0, GOOD:0, MISS:0};
+      setScore(0); setCombo(0); setMaxCombo(0); setHealth(startHpRef.current); setTimer(0);
+      setCounts({GREAT:0,GOOD:0,MISS:0}); setNotes([]); setJudg(null); setPressed({}); setLf({});
+      
+      startRef.current  = performance.now() + 3000;
+      setGs("playing"); gsRef.current = "playing";
+      rafRef.current = requestAnimationFrame(gameLoop);
+    };
+
+    const loadAndStart = async () => {
+      let audioUrl = "";
+      let isBlob = false;
+      if (currentTrack.file) {
+        audioUrl = URL.createObjectURL(currentTrack.file);
+        isBlob = true;
+      } else if (currentTrack.fileName) {
+        const res = await getAudioSrc(currentTrack.fileName);
+        audioUrl = res.url;
+        isBlob = res.isBlob;
+      } else if (currentTrack.path) {
+        audioUrl = currentTrack.path;
+      }
+
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        audio.volume = 0.5;
+        
+        audio.addEventListener('loadedmetadata', () => {
+          startPlaying(audio.duration);
+        }, {once: true});
+        audio.addEventListener('error', () => startPlaying(60), {once: true});
+
+        const tid = setTimeout(() => audio.play().catch(() => {}), 3000);
+        bgmRef.current = {stop: () => {
+          clearTimeout(tid); audio.pause(); audio.currentTime = 0; if (isBlob) URL.revokeObjectURL(audioUrl);
+        }};
+        audio.load();
+      } else {
+        startPlaying(60);
+      }
+    };
+    loadAndStart();
+  }, [gameLoop, stopBGM]);
+
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  // ── メニューへ戻る ─────────────────────────────────────────────────
+  const returnToMenu = useCallback(() => {
+    cancelAnimationFrame(rafRef.current); stopBGM();
+    stageRef.current = 1; setStage(1);
+    historyRef.current = []; setHistory([]);
+    startHpRef.current = 50;
+    trackRef.current = DEFAULT_TRACK; setTrack(DEFAULT_TRACK);
+    const fileInput = document.getElementById("bgm-file-single");
+    if(fileInput) fileInput.value = "";
+    gsRef.current = "idle"; setGs("idle"); setNotes([]); setJudg(null); setPressed({});
+  }, [stopBGM]);
+
+  // ── ヒット判定 ────────────────────────────────────────────────────
+  const handleHit = useCallback((li) => {
+    if (gsRef.current !== "playing") return;
+    if (performance.now() - startRef.current < 0) return; // カウントダウン中は無効
+    const candidates = activeRef.current
+      .filter(n => n.lane === li && !n.missed && n.y !== undefined && n.y >= 82 && n.y <= 94)
+      .sort((a, b) => Math.abs(a.y - HIT_ZONE_Y) - Math.abs(b.y - HIT_ZONE_Y));
+
+    if (candidates.length) {
+      // 通常ヒット
+      const best  = candidates[0];
+      const isGreat = Math.abs(best.y - HIT_ZONE_Y) <= 3;
+      const label = isGreat ? "GREAT" : "GOOD";
+      const displayLabel = (isGreat && healthRef.current === 100) ? "COOL" : label;
+      
+      activeRef.current = activeRef.current.filter(n => n.id !== best.id);
+      comboRef.current++;
+      if (comboRef.current > maxComboRef.current) { maxComboRef.current = comboRef.current; setMaxCombo(maxComboRef.current); }
+      countsRef.current[label]++;
+      const total = chartRef.current.length || 1;
+      scoreRef.current    = Math.round(100000 * (countsRef.current.GREAT + countsRef.current.GOOD * 0.7) / total);
+      healthRef.current   = Math.min(100, healthRef.current + (label === "GREAT" ? 2.5 : 1.0));
+      setScore(scoreRef.current); setCombo(comboRef.current);
+      setCounts({...countsRef.current}); setHealth(healthRef.current);
+      setJudg({label: displayLabel, id: noteIdRef.current++, lane: li});
+      setLf(f => ({...f, [li]: { count: (f[li]?.count ?? 0) + 1, label: displayLabel }}));
+      setTimeout(() => setLf(f => ({...f, [li]: { count: Math.max(0, (f[li]?.count ?? 1) - 1), label: displayLabel }})), 150);
+      playBeep([523,587,659,784,880][li] ?? 440);
+      return;
+    }
+
+    // 早押しMISS：ライン手前に向かってくるノートがあればMISS（ノートは消さず残す）
+    const approaching = activeRef.current.find(n => n.lane === li && !n.missed && n.y !== undefined && n.y >= 0 && n.y < 82);
+    if (approaching) {
+      // missed にはしない → その後ライン付近で再度ヒット可能
+      comboRef.current = 0; setCombo(0);
+      countsRef.current.MISS++; setCounts({...countsRef.current});
+      setJudg({label:"MISS", id: noteIdRef.current++, lane: li});
+      
+      setIsMissChar(true);
+      if (missCharTidRef.current) clearTimeout(missCharTidRef.current);
+      missCharTidRef.current = setTimeout(() => setIsMissChar(false), 1000);
+
+      healthRef.current = Math.max(0, healthRef.current - 15); setHealth(healthRef.current);
+      if (healthRef.current <= 0) { stopBGM(); setGs("gameover"); gsRef.current = "gameover"; }
+    }
+  }, [stopBGM]);
+
+  // ── キーボード ───────────────────────────────────────────────────
+  useEffect(() => {
+    const lanes = mode === "3K" ? LANES_3K : LANES_5K;
+    const dn = e => {
+      if (e.repeat) return;
+      const li = lanes.findIndex(l => l.key === e.key.toLowerCase());
+      if (li < 0) return;
+      setPressed(p => ({...p, [li]: true})); 
+      
+      if (gsRef.current === "playing") {
+        handleHit(li);
+      } else if (gsRef.current === "recording") {
+        const beatMs = 60000 / custBpm;
+        const beat = (performance.now() - recStartRef.current) / beatMs;
+        setRecChart(prev => [...prev, {beat, lane: li, id: `rec-${Date.now()}-${li}`}]);
+        playBeep([523,587,659,784,880][li] ?? 440);
+        setLf(f => ({...f, [li]: { count: (f[li]?.count ?? 0) + 1, label: "REC" }}));
+        setTimeout(() => setLf(f => ({...f, [li]: { count: Math.max(0, (f[li]?.count ?? 1) - 1), label: "REC" }})), 150);
+      }
+    };
+    const up = e => {
+      const li = lanes.findIndex(l => l.key === e.key.toLowerCase());
+      if (li >= 0) setPressed(p => ({...p, [li]: false}));
+    };
+    window.addEventListener("keydown", dn); window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up); };
+  }, [handleHit, gs, mode]);
+
+  useEffect(() => {
+    if (!judg) return;
+    const t = setTimeout(() => setJudg(null), 700);
+    return () => clearTimeout(t);
+  }, [judg]);
+
+  // ── 集計 ──────────────────────────────────────────────────────────
+  const totalNotes = chartRef.current.length || 1;
+  const allGreat   = counts.GOOD === 0 && counts.MISS === 0 && counts.GREAT > 0;
+  const accuracy   = ((countsRef.current.GREAT * 100 + countsRef.current.GOOD * 70) / (totalNotes * 100) * 100).toFixed(1);
+  const rank       = allGreat ? "S" : accuracy >= 85 ? "A" : accuracy >= 70 ? "B" : accuracy >= 50 ? "C" : "D";
+  const rankColor  = {S:"#FFD600",A:"#00E5FF",B:"#69FF47",C:"#FF6D00",D:"#FF3FA4"}[rank];
+  const activeLanes = mode === "3K" ? LANES_3K : LANES_5K;
+  const mm = s => String(Math.floor(s / 60)).padStart(2,"0") + ":" + String(Math.floor(s % 60)).padStart(2,"0");
+
+  const cdText = timer < 0 ? Math.ceil(-timer) : null;
+
+  // ================================================================
+  // IDLE画面
+  // ================================================================
+  if (gs === "idle") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",overflowX:"hidden",overflowY:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",position:"relative"}},
+    charSprites[0] && h("div", {style:{position:"absolute",right:"8vw",top:"50%",transform:"translateY(-50%)",width:"216px",height:"216px",background:"transparent",zIndex:1,display:"flex",alignItems:"center",justifyContent:"center"}},
+      h("img", {src:charSprites[0], style:{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
+    ),
+    h("div", {style:{textAlign:"center",zIndex:10,position:"relative",width:"100%",maxWidth:720,padding:"28px 5vw 48px"}},
+
+      h("div", {style:{fontSize:"clamp(2rem,8vw,5rem)",fontWeight:900,letterSpacing:6,background:"linear-gradient(135deg,#FF3FA4,#FFD600,#00E5FF,#69FF47,#FF6D00)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 20px #FF3FA4aa)",marginBottom:8}}, "POP★BEAT"),
+      h("div", {style:{color:"#00E5FF",fontSize:18,fontWeight:900,letterSpacing:6,marginBottom:4,textShadow:"0 0 10px #00E5FF"}}, "STAGE " + stage),
+      h("div", {style:{color:"#8855bb",fontSize:13,letterSpacing:4,marginBottom:24}}, "RHYTHM GAME"),
+
+      // MODE
+      h("div", {style:{marginBottom:18}},
+        h("div", {style:{color:"#8855bb",fontSize:10,letterSpacing:4,marginBottom:10}}, "MODE"),
+        h("div", {style:{display:"flex",gap:10,justifyContent:"center"}},
+          ["3K","5K"].map(m => h("button", {key:m, onClick:()=>setMode(m), style:{padding:"10px 32px",borderRadius:50,fontSize:16,fontWeight:800,letterSpacing:3,cursor:"pointer",transition:"all 0.15s",background:mode===m?"linear-gradient(135deg,#FF3FA4,#8B00FF)":"transparent",border:mode===m?"none":"1px solid #330066",color:mode===m?"#fff":"#8855bb",boxShadow:mode===m?"0 0 24px #FF3FA4aa":"none"}}, m))
+        )
+      ),
+
+      // SPEED
+      h("div", {style:{marginBottom:18}},
+        h("div", {style:{color:"#8855bb",fontSize:10,letterSpacing:4,marginBottom:10}}, "SPEED"),
+        h("div", {style:{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap"}},
+          SPEED_OPTIONS.map(o => h("button", {key:o.value, onClick:()=>setSpeed(o.value), style:{padding:"7px 16px",borderRadius:50,fontSize:12,fontWeight:700,letterSpacing:2,cursor:"pointer",transition:"all 0.15s",background:speed===o.value?"linear-gradient(135deg,#FFD600,#FF6D00)":"transparent",border:speed===o.value?"none":"1px solid #330066",color:speed===o.value?"#000":"#8855bb",boxShadow:speed===o.value?"0 0 16px #FFD600aa":"none"}}, o.label))
+        )
+      ),
+
+      // LEVEL
+      h("div", {style:{marginBottom:22}},
+        h("div", {style:{color:"#8855bb",fontSize:10,letterSpacing:4,marginBottom:10}}, "LEVEL"),
+        h("div", {style:{display:"flex",gap:6,justifyContent:"center"}},
+          LEVEL_OPTIONS.map(o => h("button", {key:o.value, onClick:()=>setLevel(o.value), style:{padding:"7px 0",width:52,borderRadius:10,fontSize:11,fontWeight:800,letterSpacing:1,cursor:"pointer",transition:"all 0.15s",display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:level===o.value?`linear-gradient(135deg,${LEVEL_COLORS[o.value-1]},${LEVEL_DARKS[o.value-1]})`:"transparent",border:level===o.value?"none":"1px solid #330066",color:level===o.value?"#000":"#8855bb",boxShadow:level===o.value?`0 0 14px ${LEVEL_COLORS[o.value-1]}aa`:"none"}},
+            h("span", null, o.label),
+            h("span", {style:{fontSize:8,opacity:0.8}}, o.desc)
+          ))
+        )
+      ),
+
+      // レーンドット
+      h("div", {style:{display:"flex",gap:8,justifyContent:"center",marginBottom:14}},
+        activeLanes.map((l, i) => h("div", {key:i, style:{width:28,height:28,borderRadius:"50%",background:l.color,boxShadow:`0 0 14px ${l.color}`,animation:`bounce 0.8s ${i*0.15}s ease-in-out infinite alternate`}}))
+      ),
+      h("div", {style:{color:"#666",fontSize:12,letterSpacing:2,marginBottom:22}}, `KEYS: ${mode==="3K"?"A · D · G":"A · S · D · F · G"}`),
+
+      // BGM選択画面へ遷移ボタン
+      h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:16}},
+        h("button", {
+          onClick: () => { setGs("bgm_select"); gsRef.current = "bgm_select"; },
+          style:{background:"linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"14px 48px",color:"#fff",fontSize:16,fontWeight:800,letterSpacing:3,cursor:"pointer",boxShadow:"0 0 30px #FF3FA4aa",transition:"transform 0.1s"},
+          onMouseEnter: e => e.currentTarget.style.transform="scale(1.07)",
+          onMouseLeave: e => e.currentTarget.style.transform="scale(1)"
+        }, "♪ STAGE BGM SELECT"),
+
+        h("button", {
+          onClick: () => { setGs("customize"); gsRef.current = "customize"; },
+          style:{background:"transparent",border:"2px solid #00E5FF",borderRadius:50,padding:"10px 32px",color:"#00E5FF",fontSize:14,fontWeight:800,letterSpacing:2,cursor:"pointer",boxShadow:"0 0 16px #00E5FFaa",transition:"transform 0.1s"},
+          onMouseEnter: e => e.currentTarget.style.transform="scale(1.07)",
+          onMouseLeave: e => e.currentTarget.style.transform="scale(1)"
+        }, "🛠 CUSTOMIZE (譜面登録)"),
+        
+        stage > 1 && h("div", {style:{fontSize:13,color:"#69FF47",letterSpacing:1}}, "SCORE: " + history.reduce((a,c)=>a+c.score,0).toLocaleString() + " | HP 引き継ぎ: " + Math.floor(startHpRef.current) + "%")
+      )
+    )
+  );
+
+  // ================================================================
+  // BGM SELECT画面
+  // ================================================================
+  if (gs === "bgm_select") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",overflow:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",position:"relative"}},
+    charSprites[0] && h("div", {style:{position:"absolute",right:"8vw",top:"50%",transform:"translateY(-50%)",width:"216px",height:"216px",background:"transparent",zIndex:1,display:"flex",alignItems:"center",justifyContent:"center"}},
+      h("img", {src:charSprites[0], style:{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
+    ),
+    h("div", {style:{textAlign:"center",zIndex:10,position:"relative",width:"100%",maxWidth:720,padding:"48px 5vw"}},
+
+      h("div", {style:{fontSize:"clamp(1.5rem,6vw,3rem)",fontWeight:900,letterSpacing:6,color:"#fff",filter:"drop-shadow(0 0 10px #FF3FA4aa)",marginBottom:8}}, "STAGE BGM SELECT"),
+      h("div", {style:{color:"#00E5FF",fontSize:18,fontWeight:900,letterSpacing:6,marginBottom:32,textShadow:"0 0 10px #00E5FF"}}, "STAGE " + stage),
+
+      // BGM CONFIG
+      h("div", {style:{marginBottom:40, background:"rgba(0,0,0,0.4)", padding:"24px", borderRadius:"16px", border:"1px solid #330066"}},
+        h("div", {style:{color:"#8855bb",fontSize:12,letterSpacing:4,marginBottom:16}}, "MP3 FILE"),
+        h("div", {style:{display:"flex",gap:12,alignItems:"center",justifyContent:"center",flexWrap:"wrap"}},
+
+          h("div", {
+            style:{flex:1, minWidth:"200px", padding:"12px 16px",borderRadius:10,border:"1px solid #330066",background:"#050008",color:(track.file||track.path)?"#00E5FF":"#666",fontWeight:700,fontSize:13,textAlign:"left",letterSpacing:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}
+          }, track.fileName ? `♪ ${track.fileName}` : "未選択（無音）"),
+
+          h("div", {style:{display:"flex",gap:8,position:"relative"}},
+            h("button", {
+              title: "MP3ファイルを選択",
+              onClick: () => { const el = document.getElementById("bgm-file-single"); if(el) el.click(); },
+              style:{width:44,height:44,borderRadius:10,background:"#1a0035",border:"1px solid #330066",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:20,flexShrink:0,transition:"all 0.15s",color:"#fff"},
+              onMouseEnter: e => { e.currentTarget.style.borderColor="#00E5FF"; },
+              onMouseLeave: e => { e.currentTarget.style.borderColor="#330066"; }
+            }, "📁"),
+            h("input", {id: "bgm-file-single", type:"file", accept:"audio/*", style:{opacity:0, position:"absolute", zIndex:-1, width:1, height:1}, onChange: handleFileChange}),
+            
+            (track.file || track.path) && h("button", {
+              title: "未選択に戻す",
+              onClick: () => { trackRef.current = DEFAULT_TRACK; setTrack(DEFAULT_TRACK); const el = document.getElementById("bgm-file-single"); if(el) el.value = ""; },
+              style:{width:44,height:44,borderRadius:10,background:"transparent",border:"1px solid #FF3FA4",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:16,flexShrink:0,color:"#FF3FA4"}
+            }, "✖")
+          ),
+
+          (track.file || track.path) && h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:6,flexShrink:0, marginLeft: "12px", background:"#1a0035", padding:"8px 16px", borderRadius:12, border:"1px solid #330066"}},
+            h("div", {style:{color:"#8855bb",fontSize:10,letterSpacing:2}}, "BPM"),
+            h("div", {
+              style:{color:isMeasuringBpm?"#00E5FF":"#fff",fontSize:20,fontWeight:"900",fontFamily:"monospace"}
+            }, isMeasuringBpm ? "測定中..." : track.bpm)
+          )
+        )
+      ),
+
+      // カスタムBGM選択
+      h("div", {style:{marginBottom:40, background:"rgba(0,0,0,0.4)", padding:"24px", borderRadius:"16px", border:"1px solid #330066"}},
+        h("div", {style:{color:"#8855bb",fontSize:12,letterSpacing:4,marginBottom:16}}, "CUSTOM SONGS (登録済み)"),
+        customSongs.length === 0 ? h("div", {style:{color:"#666",fontSize:14}}, "登録された曲がありません。CUSTOMIZEから登録してください。") :
+        h("div", {style:{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}},
+          customSongs.map(song => h("button", {
+            key: song.id,
+            onClick: () => startGame(mode, level, speed, song),
+            style:{padding:"12px 24px",borderRadius:12,background:"linear-gradient(135deg,#00E5FF,#0088cc)",border:"none",color:"#000",fontWeight:"bold",cursor:"pointer",boxShadow:"0 0 10px #00E5FFaa",display:"flex",flexDirection:"column",alignItems:"center"}
+          }, 
+            h("span", {style:{fontSize:16}}, `♪ ${song.name}`),
+            h("span", {style:{fontSize:10,opacity:0.8}}, `BPM: ${song.bpm} / Notes: ${song.chart.length}`)
+          ))
+        )
+      ),
+
+      // 操作ボタン群
+      h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:20}},
+        h("button", {
+          onClick: () => startGame(mode, level, speed, null),
+          style:{background:"linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"16px 56px",color:"#fff",fontSize:16,fontWeight:900,letterSpacing:3,cursor:"pointer",boxShadow:"0 0 40px #FF3FA4aa",transition:"transform 0.1s"},
+          onMouseEnter: e => e.currentTarget.style.transform="scale(1.05)",
+          onMouseLeave: e => e.currentTarget.style.transform="scale(1)"
+        }, "▶ PLAY STANDARD (自動生成譜面)"),
+
+        h("button", {
+          onClick: () => { setGs("idle"); gsRef.current = "idle"; },
+          style:{background:"transparent",border:"1px solid #330066",borderRadius:50,padding:"10px 32px",color:"#8855bb",fontSize:12,fontWeight:700,letterSpacing:2,cursor:"pointer",transition:"all 0.15s"},
+          onMouseEnter: e => { e.currentTarget.style.borderColor="#00E5FF"; e.currentTarget.style.color="#00E5FF"; },
+          onMouseLeave: e => { e.currentTarget.style.borderColor="#330066"; e.currentTarget.style.color="#8855bb"; }
+        }, "◀ BACK (戻る)")
+      )
+    )
+  );
+
+  // ================================================================
+  // CUSTOMIZE画面
+  // ================================================================
+  if (gs === "customize") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto"}},
+    h("div", {style:{textAlign:"center",width:"100%",maxWidth:600,padding:"32px",background:"rgba(10,0,20,0.9)",borderRadius:20,border:"1px solid #00E5FF",boxShadow:"0 0 40px #00E5FF44"}},
+      h("div", {style:{fontSize:24,color:"#00E5FF",fontWeight:900,letterSpacing:4,marginBottom:24}}, "CUSTOMIZE MODE"),
+      
+      h("div", {style:{display:"flex",flexDirection:"column",gap:16,marginBottom:32}},
+        h("input", {placeholder:"曲名", value:custName, onChange:e=>setCustName(e.target.value), style:{padding:12,borderRadius:8,border:"1px solid #330066",background:"#000",color:"#fff"}}),
+        
+        availableFiles.length > 0 ? h("select", {
+          value: custFile || "",
+          onChange: e => {
+            const val = e.target.value;
+            setCustFile(val);
+            if (!custName || availableFiles.some(f => f.replace(/^imported_/, "").replace(/\.[^/.]+$/, "") === custName)) {
+              setCustName(val.replace(/^imported_/, "").replace(/\.[^/.]+$/, ""));
+            }
+          },
+          style:{padding:12,borderRadius:8,border:"1px solid #330066",background:"#000",color:"#fff",cursor:"pointer"}
+        }, availableFiles.map(f => h("option", {key:f, value:f}, f.replace(/^imported_/, "【取込済】 "))))
+        : h("input", {placeholder:"ファイル名 (例: 戦闘曲３４.mp3)", value:custFile||"", onChange:e=>setCustFile(e.target.value), style:{padding:12,borderRadius:8,border:"1px solid #330066",background:"#000",color:"#fff"}}),
+        
+        h("input", {type:"number", placeholder:"BPM", value:custBpm, onChange:e=>setCustBpm(Number(e.target.value)), style:{padding:12,borderRadius:8,border:"1px solid #330066",background:"#000",color:"#fff"}}),
+
+        h("div", {style:{display:"flex",gap:16,alignItems:"center",justifyContent:"center",marginTop:8}},
+          h("label", {
+            style:{background:"#330066",border:"1px solid #FF3FA4",borderRadius:8,padding:"10px 16px",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:"bold",boxShadow:"0 0 10px #FF3FA455"}
+          }, "📁 パソコンからMP3を取り込む",
+            h("input", {
+              type:"file", accept:"audio/*", style:{display:"none"},
+              onChange: async e => {
+                const file = e.target.files[0];
+                if(!file) return;
+                try {
+                  const buf = await file.arrayBuffer();
+                  const prefixedName = "imported_" + file.name;
+                  await saveAudioFile(prefixedName, buf);
+                  alert(file.name + " をゲーム内に取り込みました！");
+                  setAvailableFiles(prev => Array.from(new Set([...prev, prefixedName])));
+                  setCustFile(prefixedName);
+                  if(!custName || availableFiles.some(f => f.replace(/^imported_/, "").replace(/\.[^/.]+$/, "") === custName)) {
+                    setCustName(prefixedName.replace(/^imported_/, "").replace(/\.[^/.]+$/, ""));
+                  }
+                } catch(err) {
+                  alert("取り込みに失敗しました: " + err);
+                }
+              }
+            })
+          )
+        )
+      ),
+
+      h("div", {style:{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#1a0035",padding:16,borderRadius:12,marginBottom:24}},
+        h("div", {style:{textAlign:"left",color:"#8855bb",fontSize:12}},
+          h("div", null, "現在の記録ノーツ数: ", h("span", {style:{color:"#fff",fontSize:16,fontWeight:"bold"}}, recChart.length))
+        ),
+        h("button", {
+          onClick: () => {
+            if(!custName || !custFile) return alert("曲名とファイル名を入力してください");
+            setGs("editor"); gsRef.current = "editor";
+            setEditorTime(0);
+            setIsPlayingEditor(false);
+          },
+          style:{background:"#FF3FA4",border:"none",borderRadius:8,padding:"10px 24px",color:"#fff",fontWeight:"bold",cursor:"pointer"}
+        }, "🖌 エディタを開く (EDITOR)")
+      ),
+
+      h("div", {style:{display:"flex",gap:16,justifyContent:"center"}},
+        h("button", {
+          onClick: () => {
+            if(!custName || !custFile || recChart.length===0) return alert("録画データがありません");
+            const newSong = {id:Date.now(), name:custName, fileName:custFile, bpm:custBpm, chart:recChart};
+            const updated = [...customSongs, newSong];
+            setCustomSongs(updated);
+            localStorage.setItem("popn_custom", JSON.stringify(updated));
+            alert("保存しました！");
+            setGs("idle"); gsRef.current = "idle";
+          },
+          style:{background:"#00E5FF",border:"none",borderRadius:50,padding:"12px 32px",color:"#000",fontWeight:"bold",cursor:"pointer"}
+        }, "💾 保存して戻る"),
+        h("button", {
+          onClick: () => { setGs("idle"); gsRef.current = "idle"; },
+          style:{background:"transparent",border:"1px solid #330066",borderRadius:50,padding:"12px 32px",color:"#8855bb",cursor:"pointer"}
+        }, "キャンセル")
+      ),
+      
+      customSongs.length > 0 && h("div", {style:{marginTop:32,borderTop:"1px solid #330066",paddingTop:16}},
+        h("div", {style:{color:"#8855bb",fontSize:12,marginBottom:12}}, "登録済み曲の削除"),
+        h("div", {style:{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}},
+          customSongs.map(song => h("button", {
+            key:song.id,
+            onClick: () => {
+              if(confirm(`「${song.name}」を削除しますか？`)) {
+                const updated = customSongs.filter(s => s.id !== song.id);
+                setCustomSongs(updated);
+                localStorage.setItem("popn_custom", JSON.stringify(updated));
+              }
+            },
+            style:{background:"#330066",border:"none",borderRadius:4,padding:"6px 12px",color:"#fff",fontSize:10,cursor:"pointer"}
+          }, `✖ ${song.name}`))
+        )
+      )
+    )
+  );
+
+  // ================================================================
+  // EDITOR画面
+  // ================================================================
+  if (gs === "editor") {
+    const totalBeats = Math.max(30, Math.ceil((editorDuration / 60) * custBpm)) + 4;
+    const SNAP = 4; // 1/4拍スナップ
+    const lanes = mode === "3K" ? LANES_3K : LANES_5K;
+    
+    return h("div", {style:{display:"flex",width:"100%",height:"var(--app-h)",background:"#0a0010",color:"#fff",overflow:"hidden"}},
+      // 左パネル：コントロール
+      h("div", {style:{width:"320px",background:"#1a0035",padding:"20px",display:"flex",flexDirection:"column",gap:16,borderRight:"1px solid #330066",zIndex:10,boxShadow:"2px 0 20px #000"}},
+        h("div", {style:{fontSize:24,fontWeight:"900",color:"#00E5FF",letterSpacing:2}}, "CHART EDITOR"),
+        h("div", {style:{background:"rgba(0,0,0,0.5)",padding:12,borderRadius:8}},
+          h("div", {style:{fontSize:14,color:"#fff",marginBottom:4}}, `曲: ${custName}`),
+          h("div", {style:{fontSize:12,color:"#00E5FF"}}, `BPM: ${custBpm}`)
+        ),
+        
+        h("audio", {
+          ref: editorAudioRef,
+          src: editorAudioUrl,
+          controls: true,
+          onLoadedMetadata: e => setEditorDuration(e.target.duration),
+          onEnded: () => setIsPlayingEditor(false),
+          onPlay: () => setIsPlayingEditor(true),
+          onPause: () => setIsPlayingEditor(false),
+          onTimeUpdate: e => { if(!isPlayingEditor) setEditorTime(e.target.currentTime); },
+          style: { width: "100%", outline:"none" }
+        }),
+
+        h("div", {style:{fontSize:12,color:"#8855bb",lineHeight:1.6}}, 
+          "※ 右のレーンをクリックしてノーツを配置/削除します。", h("br"),
+          "※ オーディオのシークバーを動かすと、譜面も連動してスクロールします。"
+        ),
+
+        h("div", {style:{marginTop:"auto",display:"flex",flexDirection:"column",gap:16}},
+          // ズームイン・アウトのコントロール
+          h("div", {style:{display:"flex",flexDirection:"column",gap:8,background:"rgba(0,0,0,0.3)",padding:"10px",borderRadius:"8px",border:"1px solid #330066"}},
+            h("div", {style:{fontSize:12,color:"#8855bb",fontWeight:"bold",display:"flex",justifyContent:"space-between"}}, 
+              h("span", null, "🔍 ズーム（表示倍率）"),
+              h("span", {style:{color:"#00E5FF"}}, `${Math.round((beatHeight / 160) * 100)}%`)
+            ),
+            h("div", {style:{display:"flex",gap:8}},
+              h("button", {
+                onClick: () => setBeatHeight(h => Math.max(40, h - 20)),
+                style:{flex:1,padding:"8px 0",background:"#1a0035",border:"1px solid #FF3FA4",borderRadius:8,color:"#FF3FA4",cursor:"pointer",fontWeight:"bold",fontSize:12,transition:"all 0.15s"},
+                onMouseEnter: e => { e.currentTarget.style.background = "#FF3FA4"; e.currentTarget.style.color = "#000"; },
+                onMouseLeave: e => { e.currentTarget.style.background = "#1a0035"; e.currentTarget.style.color = "#FF3FA4"; }
+              }, "縮小"),
+              h("button", {
+                onClick: () => setBeatHeight(160),
+                style:{padding:"8px 10px",background:"#222",border:"1px solid #330066",borderRadius:8,color:"#ccc",cursor:"pointer",fontSize:11}
+              }, "リセット"),
+              h("button", {
+                onClick: () => setBeatHeight(h => Math.min(480, h + 20)),
+                style:{flex:1,padding:"8px 0",background:"#1a0035",border:"1px solid #00E5FF",borderRadius:8,color:"#00E5FF",cursor:"pointer",fontWeight:"bold",fontSize:12,transition:"all 0.15s"},
+                onMouseEnter: e => { e.currentTarget.style.background = "#00E5FF"; e.currentTarget.style.color = "#000"; },
+                onMouseLeave: e => { e.currentTarget.style.background = "#1a0035"; e.currentTarget.style.color = "#00E5FF"; }
+              }, "拡大")
+            )
+          ),
+          h("div", {style:{fontSize:16,color:"#fff",fontWeight:"bold"}}, "総ノーツ数: ", h("span", {style:{color:"#FF3FA4",fontSize:24}}, recChart.length)),
+          h("button", {
+            onClick: () => setRecChart([]),
+            style:{padding:8,background:"transparent",color:"#8855bb",border:"1px solid #330066",borderRadius:8,cursor:"pointer"}
+          }, "譜面を全クリア"),
+          h("button", {
+            onClick: () => {
+              if (editorAudioRef.current) { editorAudioRef.current.pause(); editorAudioRef.current.src = ""; }
+              setIsPlayingEditor(false);
+              setGs("customize"); gsRef.current = "customize";
+            },
+            style:{padding:16,background:"linear-gradient(135deg,#00E5FF,#0088cc)",color:"#000",border:"none",borderRadius:8,fontWeight:"900",fontSize:16,cursor:"pointer",boxShadow:"0 0 15px #00E5FF66"}
+          }, "✔ 完了して戻る")
+        )
+      ),
+
+      // 右パネル：タイムライングリッド
+      h("div", {ref: editorScrollRef, style:{flex:1,position:"relative",overflowY:"auto",background:"#05000a"}},
+        h("div", {style:{position:"relative",height: totalBeats * beatHeight, width:"100%", minWidth:"500px", padding:"0 80px"}},
+          // グリッド背景
+          h("div", {style:{position:"absolute",top:0,left:80,right:80,bottom:0,
+            background: `repeating-linear-gradient(to top, #555 0px, #555 2px, transparent 2px, transparent ${beatHeight/4}px, #222 ${beatHeight/4}px, #222 ${beatHeight/4+1}px, transparent ${beatHeight/4+1}px, transparent ${beatHeight/2}px, #333 ${beatHeight/2}px, #333 ${beatHeight/2+1}px, transparent ${beatHeight/2+1}px, transparent ${beatHeight*0.75}px, #222 ${beatHeight*0.75}px, #222 ${beatHeight*0.75+1}px, transparent ${beatHeight*0.75+1}px, transparent ${beatHeight}px)`,
+            pointerEvents:"none", zIndex:0
+          }}),
+
+          // スタートライン
+          h("div", {style:{position:"absolute",bottom:0,left:80,right:80,height:4,background:"#00E5FF",boxShadow:"0 0 20px #00E5FF",zIndex:1,pointerEvents:"none"}}),
+          h("div", {style:{position:"absolute",bottom:-2,left:20,color:"#00E5FF",fontWeight:"900",fontSize:16,letterSpacing:2,zIndex:1,pointerEvents:"none"}}, "START"),
+
+          // レーン領域
+          h("div", {style:{display:"flex",height:"100%",position:"relative",zIndex:1,background:"rgba(0,0,0,0.4)",borderLeft:"2px solid #555",borderRight:"2px solid #555"}},
+            lanes.map((l, i) => h("div", {
+              key: i,
+              onClick: e => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                let beat = (rect.height - y) / beatHeight;
+                beat = Math.round(beat * SNAP) / SNAP; // 1/4拍にスナップ
+                setRecChart(prev => {
+                  const exists = prev.findIndex(n => n.lane === i && Math.abs(n.beat - beat) < 0.05);
+                  if (exists >= 0) return prev.filter((_, idx) => idx !== exists);
+                  return [...prev, {beat, lane: i, id:`ed-${Date.now()}`}];
+                });
+                playBeep([523,587,659,784,880][i] ?? 440);
+              },
+              style:{flex:1,borderRight:i<lanes.length-1?"1px dotted #444":"none",position:"relative",cursor:"crosshair"}
+            },
+              // このレーンに配置されたノーツ
+              recChart.filter(n => n.lane === i).map(n => h("div", {
+                key: n.id,
+                style:{position:"absolute",bottom: n.beat * beatHeight - 10, left:"50%",transform:"translateX(-50%)",width:"80%",height:20,background:l.color,borderRadius:4,boxShadow:`0 0 10px ${l.color}`,pointerEvents:"none"}
+              }))
+            ))
+          ),
+          
+          // 再生ヘッド（赤いライン）
+          h("div", {style:{position:"absolute",bottom: (editorTime / 60) * custBpm * beatHeight, left:0, right:0, height:2, background:"#FF3FA4",boxShadow:"0 0 15px #FF3FA4",zIndex:2,pointerEvents:"none"}})
+        )
+      )
+    );
+  }
+
+  // ================================================================
+  // PLAYING画面
+  // ================================================================
+  if (gs === "playing") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)"}},
+    h("div", {style:{width:"100%",maxWidth:760,height:"var(--app-h)",display:"flex",flexDirection:"column",zIndex:10}},
+
+      // HUD
+      h("div", {style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"12px 20px",flexShrink:0}},
+        h("div", null,
+          h("div", {style:{color:"#4a2278",fontSize:10,letterSpacing:3}}, "SCORE"),
+          h("div", {style:{color:"#fff",fontSize:"clamp(18px,4vw,28px)",fontWeight:800,fontFamily:"monospace",letterSpacing:2}}, score.toLocaleString().padStart(8,"0"))
+        ),
+        h("div", {style:{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:6}},
+          h("div", {style:{display:"inline-flex",gap:6,alignItems:"center",background:"#1a0035",borderRadius:20,padding:"3px 10px",border:"1px solid #330066"}},
+            h("span", {style:{color:"#fff",fontSize:10,fontWeight:900,letterSpacing:1}}, `S${stage}`),
+            h("span", {style:{color:"#FF3FA4",fontSize:10,fontWeight:700,letterSpacing:2}}, mode),
+            h("span", {style:{color:"#FFD600",fontSize:10,fontWeight:700}}, "×"+speed),
+            h("span", {style:{color:"#69FF47",fontSize:10,fontWeight:700}}, "Lv."+level)
+          ),
+          h("div", {style:{display:"flex", alignItems:"center", position:"relative"}},
+            h("button", {onClick:returnToMenu, style:{background:"transparent",border:"1px solid #330066",borderRadius:20,padding:"3px 14px",color:"#8855bb",fontSize:10,fontWeight:700,letterSpacing:2,cursor:"pointer",transition:"all 0.15s"},
+              onMouseEnter:e=>{e.currentTarget.style.borderColor="#FF3FA4";e.currentTarget.style.color="#FF3FA4";},
+              onMouseLeave:e=>{e.currentTarget.style.borderColor="#330066";e.currentTarget.style.color="#8855bb";}
+            }, "■ MENU"),
+            (isMissChar ? charSprites[1] : charSprites[2]) && h("img", {src:(isMissChar ? charSprites[1] : charSprites[2]), style:{position:"absolute", left:"100%", marginLeft:"110px", width:"80px",height:"80px",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
+          )
+        ),
+        h("div", {style:{textAlign:"right"}},
+          h("div", {style:{color:"#4a2278",fontSize:10,letterSpacing:3}}, "COMBO"),
+          h("div", {style:{fontSize:combo>=10?32:24,fontWeight:900,color:combo>=50?"#FFD600":combo>=20?"#00E5FF":"#fff",fontFamily:"monospace",transition:"color 0.3s"}}, combo > 1 ? combo : ""),
+          h("div", {style:{color:"#4a2278",fontSize:9,letterSpacing:2,marginTop:4}}, "TIME"),
+          h("div", {style:{color:"#fff",fontSize:14,fontWeight:700,fontFamily:"monospace"}}, mm(Math.max(0, timer)))
+        )
+      ),
+
+      // 判定カウンター＆HP
+      h("div", {style:{display:"flex",gap:12,padding:"0 20px 6px",flexShrink:0,alignItems:"center"}},
+        [["G",counts.GREAT,"#00E5FF"],["O",counts.GOOD,"#69FF47"],["M",counts.MISS,"#FF3FA4"]].map(([k,v,c]) =>
+          h("div", {key:k, style:{fontSize:10,color:c,fontWeight:700,letterSpacing:1}}, k+" ", h("span",{style:{color:"#fff"}},v))
+        ),
+        h("div", {style:{flex:1,marginLeft:8}},
+          h("div", {style:{fontSize:9,color:"#8855bb",letterSpacing:2,marginBottom:3}}, "HP"),
+          h("div", {style:{width:"100%",height:8,borderRadius:4,background:"#1a0035",border:"1px solid #330066",overflow:"hidden"}},
+            h("div", {style:{height:"100%",width:health+"%",borderRadius:4,transition:"width 0.2s",background:health>60?"linear-gradient(90deg,#69FF47,#00E5FF)":health>30?"linear-gradient(90deg,#FFD600,#FF6D00)":"linear-gradient(90deg,#FF3FA4,#FF0000)"}})
+          )
+        )
+      ),
+
+      // ゲームフィールド
+      h("div", {className:"gf", style:{flex:1,position:"relative",margin:"8px 8px 0",borderRadius:"16px 16px 0 0",overflow:"hidden",background:"linear-gradient(180deg,#0d0020 0%,#150030 100%)",border:"1px solid #220044",borderBottom:"none"}},
+
+        ...activeLanes.map((l, i) => h("div", {key:i, style:{position:"absolute",top:0,bottom:0,left:(i/activeLanes.length*100)+"%",width:(100/activeLanes.length)+"%",borderRight:i<activeLanes.length-1?"1px solid #1a0035":"none"}},
+          lf[i]?.count > 0 && (() => {
+            const isCool = lf[i].label === "COOL";
+            const bg = isCool
+              ? "linear-gradient(180deg, rgba(255,63,164,0) 0%, rgba(255,214,0,0.5) 30%, rgba(0,229,255,0.8) 60%, rgba(105,255,71,0.8) 85%, rgba(255,63,164,0.4) 100%)"
+              : `linear-gradient(180deg,${l.color}00 0%,${l.color}55 40%,${l.color}cc 85%,${l.color}44 100%)`;
+            return h("div", {style:{position:"absolute",inset:0,pointerEvents:"none",background:bg,animation:"laneFlashAnim 0.18s ease-out forwards"}});
+          })(),
+          pressed[i] && h("div", {style:{position:"absolute",inset:0,background:`linear-gradient(180deg,transparent 60%,${l.glow} 100%)`}})
+        )),
+
+        h("div", {style:{position:"absolute",inset:0,pointerEvents:"none",backgroundImage:"linear-gradient(0deg,rgba(100,0,200,0.05) 1px,transparent 1px)",backgroundSize:"100% 40px",animation:`scrollGrid ${ (60 / track.bpm) }s linear infinite`}}),
+
+        ...notes.map(note => {
+          const lane = activeLanes[note.lane]; if (!lane) return null;
+          const laneW = 100 / activeLanes.length;
+          const noteW = (100 / 5) * 0.88;
+          const lc    = note.lane * laneW + laneW / 2;
+          // 表拍かどうかの判定（小数点がない整数拍なら表拍）
+          const isOnBeat = (note.beat % 1 === 0);
+          const drawH = isOnBeat ? 72 : 36;
+          const drawGlow = isOnBeat ? `0 0 16px ${lane.color}, 0 0 36px #fff8` : `0 0 10px ${lane.color}`;
+          const drawBorder = isOnBeat ? `2px solid #fff` : `1px solid ${lane.color}`;
+          return h("div", {key:note.id, style:{position:"absolute",left:`calc(${lc}% - ${noteW/2}%)`,width:`calc(${noteW}% - 8px)`,top:note.y+"%",height:drawH,borderRadius:8,background:`linear-gradient(180deg,${lane.color}ff,${lane.color}99)`,boxShadow:drawGlow,transform:"translateY(-50%)",border:drawBorder}},
+            h("div", {style:{position:"absolute",top:2,left:6,right:6,height:isOnBeat?12:4,borderRadius:4,background:isOnBeat?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.3)"}})
+          );
+        }),
+
+        h("div", {style:{position:"absolute",left:0,right:0,top:HIT_ZONE_Y+"%",height:3,background:"#fff",boxShadow:"0 0 16px #fffa, 0 0 32px #fff6"}}),
+
+        judg && (() => {
+          const laneW = 100 / activeLanes.length;
+          const lc    = judg.lane * laneW + laneW / 2;
+          const isCool = judg.label === "COOL";
+          const style = {
+            position:"absolute",left:lc+"%",top:"72%",transform:"translate(-50%,-50%)",
+            fontSize:16,fontWeight:900,letterSpacing:2,
+            animation:"judgePop 0.65s ease-out forwards",whiteSpace:"nowrap",pointerEvents:"none"
+          };
+          
+          if (isCool) {
+            style.background = "linear-gradient(90deg, #FF3FA4, #FFD600, #00E5FF, #69FF47, #FF3FA4)";
+            style.backgroundSize = "200% auto";
+            style.WebkitBackgroundClip = "text";
+            style.WebkitTextFillColor = "transparent";
+            style.filter = "drop-shadow(0 0 8px #fff)";
+            style.animation = "judgePop 0.65s ease-out forwards, rainbowMove 0.8s linear infinite";
+          } else {
+            style.color = jColor(judg.label);
+            style.textShadow = `0 0 16px ${jColor(judg.label)}`;
+          }
+
+          return h("div", {key:judg.id, style}, judg.label);
+        })(),
+
+        cdText && h("div", {
+          key: cdText,
+          style: {
+            position: "absolute", top: "45%", left: "50%", transform: "translate(-50%, -50%)",
+            fontSize: "8rem", fontWeight: 900, color: "#fff", textShadow: "0 0 40px #00E5FF, 0 0 20px #00E5FF",
+            zIndex: 100, pointerEvents: "none", animation: "judgePop 0.8s ease-out forwards"
+          }
+        }, cdText)
+      ),
+
+      // ボタン
+      h("div", {style:{display:"flex",gap:6,padding:"10px 8px calc(16px + env(safe-area-inset-bottom))",background:"#0a0018",flexShrink:0}},
+        activeLanes.map((l, i) => h("div", {
+          key:i, ref: el => laneRefs.current[i] = el,
+          onPointerDown: () => { setPressed(p=>({...p,[i]:true})); handleHit(i); },
+          onPointerUp:   () => setPressed(p=>({...p,[i]:false})),
+          onPointerLeave:() => setPressed(p=>({...p,[i]:false})),
+          style:{flex:1,height:"clamp(56px,10vw,96px)",borderRadius:12,background:pressed[i]?`radial-gradient(circle at 50% 30%,#fff8,${l.color})`:`radial-gradient(circle at 50% 30%,${l.color}88,${l.color}33)`,border:`2px solid ${l.color}`,boxShadow:pressed[i]?`0 0 30px ${l.color},0 0 60px ${l.color}66`:`0 0 10px ${l.color}55`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:2,transform:pressed[i]?"scaleY(0.92)":"scaleY(1)",transition:"transform 0.06s,box-shadow 0.06s,background 0.06s",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation"}
+        },
+          h("div", {style:{width:"clamp(22px,4vw,36px)",height:"clamp(22px,4vw,36px)",borderRadius:"50%",background:pressed[i]?"#fff":l.color,boxShadow:`0 0 8px ${l.color}`}}),
+          h("div", {style:{fontSize:"clamp(10px,1.8vw,16px)",fontWeight:700,color:pressed[i]?"#fff":l.color,letterSpacing:1}}, l.label)
+        ))
+      )
+    )
+  );
+
+  // ================================================================
+  // GAME OVER画面
+  // ================================================================
+  if (gs === "gameover") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}},
+    charSprites[3] && h("div", {style:{marginBottom:30}},
+      h("img", {src:charSprites[3], style:{width:"216px",height:"216px",objectFit:"contain"}})
+    ),
+    h("div", {style:{textAlign:"center",background:"rgba(10,0,20,0.95)",borderRadius:24,border:"1px solid #FF3FA4",padding:"40px 60px",boxShadow:"0 0 60px #FF3FA444"}},
+      h("div", {style:{fontSize:"4rem",fontWeight:900,letterSpacing:4,color:"#FF3FA4",filter:"drop-shadow(0 0 24px #FF3FA4)",marginBottom:12}}, "GAME OVER"),
+      h("div", {style:{color:"#8855bb",fontSize:12,marginBottom:8}}, `${mode} | SPEED ×${speed} | Lv.${level}`),
+      h("div", {style:{fontSize:"2rem",fontWeight:800,color:"#fff",letterSpacing:2,marginBottom:20}}, score.toLocaleString()),
+      h("div", {style:{display:"flex",gap:10,justifyContent:"center"}},
+        h("button", {onClick:()=>startGame(mode,level,speed), style:{background:"linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"12px 40px",color:"#fff",fontSize:15,fontWeight:800,letterSpacing:3,cursor:"pointer",boxShadow:"0 0 24px #FF3FA4aa"}}, "▶ RETRY"),
+        h("button", {onClick:()=>setGs("idle"), style:{background:"transparent",border:"1px solid #330066",borderRadius:50,padding:"12px 28px",color:"#8855bb",fontSize:13,fontWeight:700,cursor:"pointer"}}, "MENU")
+      )
+    )
+  );
+
+  // ================================================================
+  // STAGE RESULT画面
+  // ================================================================
+  if (gs === "stage_result") {
+    const curRes = history[history.length - 1] || {};
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)"}},
+      charSprites[0] && h("div", {style:{marginBottom:30}},
+        h("img", {src:charSprites[0], style:{width:"192px",height:"192px",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
+      ),
+      h("div", {style:{textAlign:"center",background:"rgba(10,0,20,0.95)",borderRadius:24,border:`1px solid ${jColor(curRes.rank) || "#330066"}`,padding:"40px 60px",boxShadow:`0 0 60px ${jColor(curRes.rank) || "#8A00FF"}44`}},
+        h("div", {style:{fontSize:"2.5rem",fontWeight:900,letterSpacing:4,color:"#fff",marginBottom:8}}, `STAGE ${stage} CLEAR!`),
+        h("div", {style:{fontSize:"4rem",fontWeight:900,color:jColor(curRes.rank),textShadow:`0 0 20px ${jColor(curRes.rank)}`,marginBottom:20}}, curRes.rank),
+        h("div", {style:{fontSize:"2rem",fontWeight:800,color:"#fff",fontFamily:"monospace",letterSpacing:2,marginBottom:20}}, (curRes.score || 0).toLocaleString()),
+        
+        h("div", {style:{display:"flex",gap:40,justifyContent:"center",marginBottom:30,textAlign:"left"}},
+          h("div", null,
+            h("div", {style:{color:"#00E5FF",fontSize:14,fontWeight:800}}, `COOL/GREAT: ${curRes.counts?.GREAT || 0}`),
+            h("div", {style:{color:"#69FF47",fontSize:14,fontWeight:800}}, `GOOD: ${curRes.counts?.GOOD || 0}`),
+            h("div", {style:{color:"#FF3FA4",fontSize:14,fontWeight:800}}, `MISS: ${curRes.counts?.MISS || 0}`)
+          ),
+          h("div", null,
+            h("div", {style:{color:"#FFD600",fontSize:14,fontWeight:800}}, `MAX COMBO: ${curRes.maxCombo || 0}`),
+            h("div", {style:{color:"#fff",fontSize:14,fontWeight:800}}, `ACCURACY: ${curRes.accuracy || "0.0"}%`)
+          )
+        ),
+
+        h("button", {
+          onClick: () => {
+            if (stage < 3) {
+              stageRef.current++; setStage(stageRef.current);
+              startHpRef.current = Math.max(10, healthRef.current);
+              trackRef.current = DEFAULT_TRACK; setTrack(DEFAULT_TRACK);
+              const fileInput = document.getElementById("bgm-file-single");
+              if (fileInput) fileInput.value = "";
+              setGs("idle"); gsRef.current = "idle";
+            } else {
+              setGs("final_result"); gsRef.current = "final_result";
+            }
+          },
+          style:{background:"linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"14px 40px",color:"#fff",fontSize:16,fontWeight:800,letterSpacing:3,cursor:"pointer",boxShadow:"0 0 30px #FF3FA4aa"}
+        }, stage < 3 ? "▶ NEXT STAGE" : "▶ FINAL RESULT")
+      )
+    );
+  }
+
+  // ================================================================
+  // FINAL RESULT画面 (全3ステージ終了)
+  // ================================================================
+  if (gs === "final_result") {
+    const totalScoreStr = history.reduce((a,c)=>a+c.score, 0).toLocaleString();
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",padding:"40px 0"}},
+      h("div", {style:{fontSize:"3.5rem",fontWeight:900,color:"#FFD600",textShadow:"0 0 30px #FFD600aa",letterSpacing:6,marginBottom:40,textAlign:"center"}}, "CONGRATULATION!"),
+      h("div", {style:{display:"flex",alignItems:"center",justifyContent:"center",gap:"60px",flexWrap:"wrap",width:"100%"}},
+        h("div", {style:{textAlign:"center",background:"rgba(10,0,20,0.92)",borderRadius:24,border:"1px solid #330066",padding:"30px 40px",boxShadow:"0 0 60px #8A00FF44",maxWidth:"90%",width:"400px"}},
+          h("div", {style:{fontSize:14,letterSpacing:6,color:"#00E5FF",marginBottom:16,fontWeight:900}}, "FINAL RESULT"),
+          h("div", {style:{fontSize:"3rem",fontWeight:900,color:"#fff",letterSpacing:4,marginBottom:20,textShadow:"0 0 20px #fff8"}}, totalScoreStr),
+          h("div", {style:{display:"flex",flexDirection:"column",gap:12,textAlign:"left",marginBottom:24,width:"100%"}},
+            history.map((r, i) => h("div", {key:i, style:{background:"rgba(255,255,255,0.05)",padding:"10px 16px",borderRadius:12,border:"1px solid #330066",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+              h("div", null,
+                h("div", {style:{fontSize:12,color:"#00E5FF",fontWeight:800,letterSpacing:1,marginBottom:4}}, "STAGE " + r.stage),
+                h("div", {style:{fontSize:10,color:"#8855bb"}}, `Acc: ${r.accuracy}% / MaxC: ${r.maxCombo}`)
+              ),
+              h("div", {style:{textAlign:"right"}},
+                h("div", {style:{fontSize:16,fontWeight:800,color:"#fff"}}, r.score.toLocaleString()),
+                h("div", {style:{fontSize:12,fontWeight:900,color:jColor(r.rank)}}, r.rank)
+              )
+            ))
+          ),
+          h("button", {onClick: returnToMenu, style:{background:"linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"14px 44px",color:"#fff",fontSize:16,fontWeight:800,letterSpacing:3,cursor:"pointer",boxShadow:"0 0 24px #FF3FA4aa"}}, "▶ 最初から遊ぶ")
+        ),
+        h("img", {
+          src: "images/final_char_bg.png", 
+          alt: "画像がありません。", 
+          style: {width:288, height:288, objectFit:"contain", animation:"charDance 0.8s infinite ease-in-out"}
+        })
+      )
+    );
+  }
+  return null; // Fallback
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(PopnGame));
+</script>
+</body>
+</html>
