@@ -895,13 +895,15 @@ function PopnGame() {
   // BGM SELECT画面
   // ================================================================
   if (gs === "bgm_select") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",overflow:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",position:"relative"}},
-    charSprites[0] && h("div", {style:{position:"absolute",right:"8vw",top:"50%",transform:"translateY(-50%)",width:"216px",height:"216px",background:"transparent",zIndex:1,display:"flex",alignItems:"center",justifyContent:"center"}},
-      h("img", {src:charSprites[0], style:{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
-    ),
     h("div", {style:{textAlign:"center",zIndex:10,position:"relative",width:"100%",maxWidth:720,padding:"48px 5vw"}},
 
       h("div", {style:{fontSize:"clamp(1.5rem,6vw,3rem)",fontWeight:900,letterSpacing:6,color:"#fff",filter:"drop-shadow(0 0 10px #FF3FA4aa)",marginBottom:8}}, "STAGE BGM SELECT"),
-      h("div", {style:{color:"#00E5FF",fontSize:18,fontWeight:900,letterSpacing:6,marginBottom:32,textShadow:"0 0 10px #00E5FF"}}, "STAGE " + stage),
+      h("div", {style:{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:32}},
+        h("div", {style:{color:"#00E5FF",fontSize:18,fontWeight:900,letterSpacing:6,textShadow:"0 0 10px #00E5FF"}}, "STAGE " + stage),
+        charSprites[0] && h("div", {style:{width:54,height:54,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}},
+          h("img", {src:charSprites[0], style:{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
+        )
+      ),
 
       // BGM CONFIG
       h("div", {style:{marginBottom:40, background:"rgba(0,0,0,0.4)", padding:"24px", borderRadius:"16px", border:"1px solid #330066"}},
