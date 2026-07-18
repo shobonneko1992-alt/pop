@@ -656,7 +656,10 @@ function PopnGame() {
   const startGame = useCallback((m, lv, sp, customSong = null) => {
     stopBGM();
     const currentTrack = customSong ? {fileName: customSong.fileName, bpm: customSong.bpm} : trackRef.current;
-    beatMsRef.current = 60000 / currentTrack.bpm;
+    const rawBpm = Number(currentTrack.bpm);
+    const safeBpm = Number.isFinite(rawBpm) && rawBpm > 0 ? rawBpm : 128; // BPM測定中(".."など)や不正値のフォールバック
+    currentTrack.bpm = safeBpm;
+    beatMsRef.current = 60000 / safeBpm;
 
     const startPlaying = (durationSec) => {
       const travelMs = BASE_TRAVEL_MS / sp;
@@ -959,11 +962,12 @@ function PopnGame() {
       // 操作ボタン群
       h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:20}},
         h("button", {
-          onClick: () => startGame(mode, level, speed, null),
-          style:{background:"linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"16px 56px",color:"#fff",fontSize:16,fontWeight:900,letterSpacing:3,cursor:"pointer",boxShadow:"0 0 40px #FF3FA4aa",transition:"transform 0.1s"},
-          onMouseEnter: e => e.currentTarget.style.transform="scale(1.05)",
+          onClick: () => { if (!isMeasuringBpm) startGame(mode, level, speed, null); },
+          disabled: isMeasuringBpm,
+          style:{background: isMeasuringBpm ? "#331a44" : "linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"16px 56px",color:"#fff",fontSize:16,fontWeight:900,letterSpacing:3,cursor: isMeasuringBpm ? "not-allowed" : "pointer",boxShadow: isMeasuringBpm ? "none" : "0 0 40px #FF3FA4aa",opacity: isMeasuringBpm ? 0.6 : 1,transition:"transform 0.1s"},
+          onMouseEnter: e => { if(!isMeasuringBpm) e.currentTarget.style.transform="scale(1.05)"; },
           onMouseLeave: e => e.currentTarget.style.transform="scale(1)"
-        }, "▶ PLAY STANDARD (自動生成譜面)"),
+        }, isMeasuringBpm ? "BPM測定中..." : "▶ PLAY STANDARD (自動生成譜面)"),
 
         h("button", {
           onClick: () => { setGs("idle"); gsRef.current = "idle"; },
@@ -1359,7 +1363,7 @@ function PopnGame() {
   if (gs === "stage_result") {
     const curRes = history[history.length - 1] || {};
     return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)"}},
-      charSprites[0] && h("div", {style:{marginBottom:30}},
+      charSprites[0] && h("div", {style:{marginTop:36,marginBottom:30}},
         h("img", {src:charSprites[0], style:{width:"192px",height:"192px",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
       ),
       h("div", {style:{textAlign:"center",background:"rgba(10,0,20,0.95)",borderRadius:24,border:`1px solid ${jColor(curRes.rank) || "#330066"}`,padding:"40px 60px",boxShadow:`0 0 60px ${jColor(curRes.rank) || "#8A00FF"}44`}},
@@ -1405,7 +1409,7 @@ function PopnGame() {
     const totalScoreStr = history.reduce((a,c)=>a+c.score, 0).toLocaleString();
     return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",padding:"40px 0"}},
       h("div", {style:{fontSize:"3.5rem",fontWeight:900,color:"#FFD600",textShadow:"0 0 30px #FFD600aa",letterSpacing:6,marginBottom:40,textAlign:"center"}}, "CONGRATULATION!"),
-      h("div", {style:{display:"flex",alignItems:"center",justifyContent:"center",gap:"60px",flexWrap:"wrap",width:"100%"}},
+      h("div", {style:{display:"flex",alignItems:"center",justifyContent:"center",gap:"20px",flexWrap:"wrap",width:"100%"}},
         h("div", {style:{textAlign:"center",background:"rgba(10,0,20,0.92)",borderRadius:24,border:"1px solid #330066",padding:"30px 40px",boxShadow:"0 0 60px #8A00FF44",maxWidth:"90%",width:"400px"}},
           h("div", {style:{fontSize:14,letterSpacing:6,color:"#00E5FF",marginBottom:16,fontWeight:900}}, "FINAL RESULT"),
           h("div", {style:{fontSize:"3rem",fontWeight:900,color:"#fff",letterSpacing:4,marginBottom:20,textShadow:"0 0 20px #fff8"}}, totalScoreStr),
@@ -1426,7 +1430,7 @@ function PopnGame() {
         h("img", {
           src: "images/final_char_bg.png", 
           alt: "画像がありません。", 
-          style: {width:288, height:288, objectFit:"contain", animation:"charDance 0.8s infinite ease-in-out"}
+          style: {width:180, height:180, objectFit:"contain", animation:"charDance 0.8s infinite ease-in-out"}
         })
       )
     );
