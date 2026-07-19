@@ -15,6 +15,15 @@
     html,body{height:100%;}
     body{background:#0a0010;overflow:hidden;font-family:'Segoe UI','Hiragino Kaku Gothic ProN',sans-serif;}
     @keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-12px)}}
+    @keyframes resultFadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes burstFly{0%{transform:translateX(0) scale(1);opacity:1;}100%{transform:translateX(46px) scale(0.15);opacity:0;}}
+    @keyframes burstFlash{0%{transform:scale(0.2);opacity:1;}100%{transform:scale(2.4);opacity:0;}}
+    @keyframes finishPop{
+      0%{opacity:0; transform:scale(0.3) rotate(-8deg);}
+      55%{opacity:1; transform:scale(1.18) rotate(2deg);}
+      75%{transform:scale(0.96) rotate(-1deg);}
+      100%{opacity:1; transform:scale(1) rotate(0deg);}
+    }
     @keyframes laneFlashAnim{0%{opacity:1}100%{opacity:0}}
     @keyframes scrollGrid{from{background-position:0 0}to{background-position:0 40px}}
     @keyframes judgePop{
@@ -392,11 +401,13 @@ function PopnGame() {
   const [health,   setHealth]   = useState(50);
   const [timer,    setTimer]    = useState(0);
   const [lf,       setLf]       = useState({});
+  const [bursts,   setBursts]   = useState([]);
   const [customSongs, setCustomSongs] = useState(() => {
     try { const s = localStorage.getItem("popn_custom"); return s ? JSON.parse(s) : []; } catch { return []; }
   });
   const [isMeasuringBpm, setIsMeasuringBpm] = useState(false);
   const [resultRevealed, setResultRevealed] = useState(false);
+  const [showFinish, setShowFinish] = useState(false);
 
   // リザルト画面（GAME OVER / STAGE CLEAR / 最終結果）に入ったら
   // まずスコアのルーレット演出だけ見せて、確定後にキャラクターや見出しを表示する
@@ -566,6 +577,8 @@ function PopnGame() {
   const healthRef   = useRef(50);
   const gsRef       = useRef("idle");
   const noteIdRef   = useRef(0);
+  const burstIdRef  = useRef(0);
+  const finishTidRef = useRef(null);
   const laneRefs    = useRef([]);
   const startRef    = useRef(0);
   const beatMsRef   = useRef(60000 / 128);
@@ -670,7 +683,7 @@ function PopnGame() {
         if (missCharTidRef.current) clearTimeout(missCharTidRef.current);
         missCharTidRef.current = setTimeout(() => setIsMissChar(false), 1000);
 
-        if (healthRef.current <= 0) { stopBGM(); setGs("gameover"); gsRef.current = "gameover"; }
+        if (healthRef.current <= 0) { stopBGM(); setResultRevealed(false); setGs("gameover"); gsRef.current = "gameover"; }
       }
       return {...n, y};
     });
@@ -679,7 +692,7 @@ function PopnGame() {
     setNotes([...activeRef.current]);
     setTimer(elapsed / 1000);
 
-    if (chartIdxRef.current >= chartRef.current.length && activeRef.current.length === 0) {
+    if (gsRef.current === "playing" && chartIdxRef.current >= chartRef.current.length && activeRef.current.length === 0) {
       stopBGM();
       const tNotes = chartRef.current.length || 1;
       const acc = ((countsRef.current.GREAT * 100 + countsRef.current.GOOD * 70) / (tNotes * 100) * 100).toFixed(1);
@@ -690,11 +703,14 @@ function PopnGame() {
       });
       setHistory([...historyRef.current]);
 
-      if (stageRef.current < 3) {
-        setGs("stage_result"); gsRef.current = "stage_result";
-      } else {
-        setGs("stage_result"); gsRef.current = "stage_result";
-      }
+      // 最後のノーツが消えたら、すぐリザルトへ行かずプレイ画面に「FINISH!」を重ねて表示
+      setShowFinish(true);
+      finishTidRef.current = setTimeout(() => {
+        finishTidRef.current = null;
+        setShowFinish(false);
+        if (gsRef.current !== "playing") return; // 途中でMENUに戻った場合は何もしない
+        setResultRevealed(false); setGs("stage_result"); gsRef.current = "stage_result";
+      }, 2500);
       return;
     }
     rafRef.current = requestAnimationFrame(gameLoop);
@@ -771,6 +787,8 @@ function PopnGame() {
   // ── メニューへ戻る ─────────────────────────────────────────────────
   const returnToMenu = useCallback(() => {
     cancelAnimationFrame(rafRef.current); stopBGM();
+    if (finishTidRef.current) { clearTimeout(finishTidRef.current); finishTidRef.current = null; }
+    setShowFinish(false);
     stageRef.current = 1; setStage(1);
     historyRef.current = []; setHistory([]);
     startHpRef.current = 50;
@@ -807,6 +825,9 @@ function PopnGame() {
       setJudg({label: displayLabel, id: noteIdRef.current++, lane: li});
       setLf(f => ({...f, [li]: { count: (f[li]?.count ?? 0) + 1, label: displayLabel }}));
       setTimeout(() => setLf(f => ({...f, [li]: { count: Math.max(0, (f[li]?.count ?? 1) - 1), label: displayLabel }})), 150);
+      const burstId = burstIdRef.current++;
+      setBursts(b => [...b, {id: burstId, lane: li}]);
+      setTimeout(() => setBursts(b => b.filter(x => x.id !== burstId)), 500);
       playBeep([523,587,659,784,880][li] ?? 440);
       return;
     }
@@ -824,7 +845,7 @@ function PopnGame() {
       missCharTidRef.current = setTimeout(() => setIsMissChar(false), 1000);
 
       healthRef.current = Math.max(0, healthRef.current - 15); setHealth(healthRef.current);
-      if (healthRef.current <= 0) { stopBGM(); setGs("gameover"); gsRef.current = "gameover"; }
+      if (healthRef.current <= 0) { stopBGM(); setResultRevealed(false); setGs("gameover"); gsRef.current = "gameover"; }
     }
   }, [stopBGM]);
 
@@ -1258,7 +1279,7 @@ function PopnGame() {
   // ================================================================
   // PLAYING画面
   // ================================================================
-  if (gs === "playing") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)"}},
+  if (gs === "playing") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",position:"relative"}},
     h("div", {style:{width:"100%",maxWidth:760,height:"var(--app-h)",display:"flex",flexDirection:"column",zIndex:10}},
 
       // HUD
@@ -1306,6 +1327,11 @@ function PopnGame() {
       // ゲームフィールド
       h("div", {className:"gf", style:{flex:1,position:"relative",margin:"8px 8px 0",borderRadius:"16px 16px 0 0",overflow:"hidden",background:"linear-gradient(180deg,#0d0020 0%,#150030 100%)",border:"1px solid #220044",borderBottom:"none"}},
 
+        showFinish && h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,pointerEvents:"none",overflow:"hidden"}},
+          h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",background:"rgba(10,0,20,0.45)",animation:"resultFadeIn 0.3s ease both"}}),
+          h("div", {style:{position:"relative",fontSize:"clamp(1.6rem,9vw,3.2rem)",fontWeight:900,letterSpacing:3,background:"linear-gradient(180deg,#fff8d8,#FFD600 45%,#FF8C00 55%,#fff8d8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 12px #FFD600cc) drop-shadow(0 3px 2px #4a2a00)",animation:"finishPop 0.9s cubic-bezier(.34,1.56,.64,1) both"}}, "FINISH!")
+        ),
+
         ...activeLanes.map((l, i) => h("div", {key:i, style:{position:"absolute",top:0,bottom:0,left:(i/activeLanes.length*100)+"%",width:(100/activeLanes.length)+"%",borderRight:i<activeLanes.length-1?"1px solid #1a0035":"none"}},
           lf[i]?.count > 0 && (() => {
             const isCool = lf[i].label === "COOL";
@@ -1335,6 +1361,19 @@ function PopnGame() {
         }),
 
         h("div", {style:{position:"absolute",left:0,right:0,top:HIT_ZONE_Y+"%",height:3,background:"#fff",boxShadow:"0 0 16px #fffa, 0 0 32px #fff6"}}),
+
+        bursts.map(b => {
+          const laneW = 100 / activeLanes.length;
+          const lc = b.lane * laneW + laneW / 2;
+          const color = (activeLanes[b.lane] || {}).color || "#fff";
+          const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+          return h("div", {key:b.id, style:{position:"absolute",left:lc+"%",top:HIT_ZONE_Y+"%",width:0,height:0,zIndex:60,pointerEvents:"none"}},
+            h("div", {style:{position:"absolute",left:0,top:0,width:50,height:50,marginLeft:-25,marginTop:-25,borderRadius:"50%",background:`radial-gradient(circle,#fff 0%,${color} 50%,transparent 72%)`,animation:"burstFlash 0.5s ease-out forwards"}}),
+            angles.map(ang => h("div", {key:ang, style:{position:"absolute",left:0,top:0,width:0,height:0,transform:`rotate(${ang}deg)`}},
+              h("div", {style:{position:"absolute",width:12,height:12,left:-6,top:-6,borderRadius:"50%",background:color,boxShadow:`0 0 8px 2px ${color}`,animation:"burstFly 0.55s ease-out forwards"}})
+            ))
+          );
+        }),
 
         judg && (() => {
           const laneW = 100 / activeLanes.length;
@@ -1391,11 +1430,11 @@ function PopnGame() {
   // GAME OVER画面
   // ================================================================
   if (gs === "gameover") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",padding:"20px 0"}},
-    charSprites[3] && h("div", {style:{marginBottom:30,opacity:resultRevealed?1:0,transition:"opacity 0.6s ease"}},
+    resultRevealed && charSprites[3] && h("div", {style:{marginBottom:30,animation:"resultFadeIn 0.6s ease"}},
       h("img", {src:charSprites[3], style:{width:"216px",height:"216px",objectFit:"contain"}})
     ),
     h("div", {style:{textAlign:"center",background:"rgba(10,0,20,0.95)",borderRadius:24,border:"1px solid #FF3FA4",padding:"40px 60px",boxShadow:"0 0 60px #FF3FA444"}},
-      h("div", {style:{fontSize:"4rem",fontWeight:900,letterSpacing:4,color:"#FF3FA4",filter:"drop-shadow(0 0 24px #FF3FA4)",marginBottom:12,opacity:resultRevealed?1:0,transition:"opacity 0.6s ease"}}, "GAME OVER"),
+      resultRevealed && h("div", {style:{fontSize:"4rem",fontWeight:900,letterSpacing:4,color:"#FF3FA4",filter:"drop-shadow(0 0 24px #FF3FA4)",marginBottom:12,animation:"resultFadeIn 0.6s ease"}}, "GAME OVER"),
       h("div", {style:{color:"#8855bb",fontSize:12,marginBottom:8}}, `${mode} | SPEED ×${speed} | Lv.${level}`),
       h("div", {style:{fontSize:"2rem",fontWeight:800,color:"#fff",letterSpacing:2,marginBottom:20}}, h(AnimatedScore, {value: score})),
       h("div", {style:{display:"flex",gap:10,justifyContent:"center"}},
@@ -1410,24 +1449,24 @@ function PopnGame() {
   // ================================================================
   if (gs === "stage_result") {
     const curRes = history[history.length - 1] || {};
-    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)"}},
-      charSprites[0] && h("div", {style:{marginTop:64,marginBottom:30,opacity:resultRevealed?1:0,transition:"opacity 0.6s ease"}},
-        h("img", {src:charSprites[0], style:{width:"192px",height:"192px",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",padding:"10px 0"}},
+      resultRevealed && charSprites[0] && h("div", {style:{marginTop:8,marginBottom:10,animation:"resultFadeIn 0.6s ease"}},
+        h("img", {src:charSprites[0], style:{width:"144px",height:"144px",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
       ),
-      h("div", {style:{textAlign:"center",background:"rgba(10,0,20,0.95)",borderRadius:24,border:`1px solid ${jColor(curRes.rank) || "#330066"}`,padding:"40px 60px",boxShadow:`0 0 60px ${jColor(curRes.rank) || "#8A00FF"}44`}},
-        h("div", {style:{fontSize:"2.5rem",fontWeight:900,letterSpacing:4,color:"#fff",marginBottom:8,opacity:resultRevealed?1:0,transition:"opacity 0.6s ease"}}, `STAGE ${stage} CLEAR!`),
-        h("div", {style:{fontSize:"4rem",fontWeight:900,color:jColor(curRes.rank),textShadow:`0 0 20px ${jColor(curRes.rank)}`,marginBottom:20,opacity:resultRevealed?1:0,transition:"opacity 0.6s ease"}}, curRes.rank),
-        h("div", {style:{fontSize:"2rem",fontWeight:800,color:"#fff",fontFamily:"monospace",letterSpacing:2,marginBottom:20}}, h(AnimatedScore, {value: curRes.score || 0})),
+      h("div", {style:{textAlign:"center",background:"rgba(10,0,20,0.95)",borderRadius:24,border:`1px solid ${jColor(curRes.rank) || "#330066"}`,padding:"clamp(16px,4vw,28px) clamp(20px,6vw,40px)",boxShadow:`0 0 60px ${jColor(curRes.rank) || "#8A00FF"}44`,maxWidth:"92%"}},
+        resultRevealed && h("div", {style:{fontSize:"clamp(1.5rem,6vw,2.2rem)",fontWeight:900,letterSpacing:3,color:"#fff",marginBottom:4,animation:"resultFadeIn 0.6s ease"}}, `STAGE ${stage} CLEAR!`),
+        resultRevealed && h("div", {style:{fontSize:"clamp(2.4rem,9vw,3.5rem)",fontWeight:900,color:jColor(curRes.rank),textShadow:`0 0 20px ${jColor(curRes.rank)}`,marginBottom:8,animation:"resultFadeIn 0.6s ease"}}, curRes.rank),
+        h("div", {style:{fontSize:"clamp(1.4rem,6vw,1.8rem)",fontWeight:800,color:"#fff",fontFamily:"monospace",letterSpacing:2,marginBottom:12}}, h(AnimatedScore, {value: curRes.score || 0})),
         
-        h("div", {style:{display:"flex",gap:40,justifyContent:"center",marginBottom:30,textAlign:"left"}},
+        h("div", {style:{display:"flex",gap:30,justifyContent:"center",marginBottom:16,textAlign:"left"}},
           h("div", null,
-            h("div", {style:{color:"#00E5FF",fontSize:14,fontWeight:800}}, `COOL/GREAT: ${curRes.counts?.GREAT || 0}`),
-            h("div", {style:{color:"#69FF47",fontSize:14,fontWeight:800}}, `GOOD: ${curRes.counts?.GOOD || 0}`),
-            h("div", {style:{color:"#FF3FA4",fontSize:14,fontWeight:800}}, `MISS: ${curRes.counts?.MISS || 0}`)
+            h("div", {style:{color:"#00E5FF",fontSize:12,fontWeight:800}}, `COOL/GREAT: ${curRes.counts?.GREAT || 0}`),
+            h("div", {style:{color:"#69FF47",fontSize:12,fontWeight:800}}, `GOOD: ${curRes.counts?.GOOD || 0}`),
+            h("div", {style:{color:"#FF3FA4",fontSize:12,fontWeight:800}}, `MISS: ${curRes.counts?.MISS || 0}`)
           ),
           h("div", null,
-            h("div", {style:{color:"#FFD600",fontSize:14,fontWeight:800}}, `MAX COMBO: ${curRes.maxCombo || 0}`),
-            h("div", {style:{color:"#fff",fontSize:14,fontWeight:800}}, `ACCURACY: ${curRes.accuracy || "0.0"}%`)
+            h("div", {style:{color:"#FFD600",fontSize:12,fontWeight:800}}, `MAX COMBO: ${curRes.maxCombo || 0}`),
+            h("div", {style:{color:"#fff",fontSize:12,fontWeight:800}}, `ACCURACY: ${curRes.accuracy || "0.0"}%`)
           )
         ),
 
@@ -1441,10 +1480,10 @@ function PopnGame() {
               if (fileInput) fileInput.value = "";
               setGs("idle"); gsRef.current = "idle";
             } else {
-              setGs("final_result"); gsRef.current = "final_result";
+              setResultRevealed(false); setGs("final_result"); gsRef.current = "final_result";
             }
           },
-          style:{background:"linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"14px 40px",color:"#fff",fontSize:16,fontWeight:800,letterSpacing:3,cursor:"pointer",boxShadow:"0 0 30px #FF3FA4aa"}
+          style:{background:"linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"12px 34px",color:"#fff",fontSize:15,fontWeight:800,letterSpacing:2,cursor:"pointer",boxShadow:"0 0 30px #FF3FA4aa"}
         }, stage < 3 ? "▶ NEXT STAGE" : "▶ FINAL RESULT")
       )
     );
@@ -1455,12 +1494,12 @@ function PopnGame() {
   // ================================================================
   if (gs === "final_result") {
     const totalScore = history.reduce((a,c)=>a+c.score, 0);
-    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",padding:"10px 0"}},
-      h("div", {style:{fontSize:"clamp(1.2rem,5.5vw,2.1rem)",fontWeight:900,color:"#FFD600",textShadow:"0 0 20px #FFD600aa",letterSpacing:3,marginBottom:2,textAlign:"center",padding:"0 5vw",opacity:resultRevealed?1:0,transition:"opacity 0.6s ease"}}, "CONGRATULATION!"),
-      h("img", {
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",overflow:"auto",padding:"36px 0 20px"}},
+      resultRevealed && h("div", {style:{fontSize:"clamp(1.44rem,6.6vw,2.52rem)",fontWeight:900,color:"#FFD600",textShadow:"0 0 20px #FFD600aa",letterSpacing:3,marginBottom:2,textAlign:"center",padding:"0 5vw",animation:"resultFadeIn 0.6s ease"}}, "CONGRATULATION!"),
+      resultRevealed && h("img", {
         src: "images/final_char_bg.png", 
         alt: "画像がありません。", 
-        style: {width:"clamp(70px,20vw,110px)", height:"clamp(70px,20vw,110px)", objectFit:"contain", animation:"charDance 0.8s infinite ease-in-out", opacity:resultRevealed?1:0, transition:"opacity 0.6s ease"}
+        style: {width:"clamp(84px,24vw,132px)", height:"clamp(84px,24vw,132px)", objectFit:"contain", animation:"charDance 0.8s infinite ease-in-out"}
       }),
       h("div", {style:{textAlign:"center",background:"rgba(10,0,20,0.92)",borderRadius:20,border:"1px solid #330066",padding:"14px 24px",boxShadow:"0 0 40px #8A00FF44",maxWidth:"92%",width:"400px"}},
         h("div", {style:{fontSize:11,letterSpacing:5,color:"#00E5FF",marginBottom:6,fontWeight:900}}, "FINAL RESULT"),
