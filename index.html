@@ -401,7 +401,6 @@ function PopnGame() {
   const [health,   setHealth]   = useState(50);
   const [timer,    setTimer]    = useState(0);
   const [lf,       setLf]       = useState({});
-  const [bursts,   setBursts]   = useState([]);
   const [customSongs, setCustomSongs] = useState(() => {
     try { const s = localStorage.getItem("popn_custom"); return s ? JSON.parse(s) : []; } catch { return []; }
   });
@@ -577,9 +576,11 @@ function PopnGame() {
   const healthRef   = useRef(50);
   const gsRef       = useRef("idle");
   const noteIdRef   = useRef(0);
-  const burstIdRef  = useRef(0);
   const finishTidRef = useRef(null);
+  const pressReleaseTidRef = useRef({});
   const laneRefs    = useRef([]);
+  const gfRef        = useRef(null);
+  const modeRef       = useRef("5K");
   const startRef    = useRef(0);
   const beatMsRef   = useRef(60000 / 128);
   const speedRef    = useRef(1.0);
@@ -592,6 +593,7 @@ function PopnGame() {
   useEffect(() => { gsRef.current = gs; }, [gs]);
   useEffect(() => { speedRef.current = speed; }, [speed]);
   useEffect(() => { trackRef.current = track; }, [track]);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
 
   // カスタマイズ画面を開いた時にフリーBGMフォルダ内のファイル一覧を取得する
   useEffect(() => {
@@ -788,6 +790,7 @@ function PopnGame() {
   const returnToMenu = useCallback(() => {
     cancelAnimationFrame(rafRef.current); stopBGM();
     if (finishTidRef.current) { clearTimeout(finishTidRef.current); finishTidRef.current = null; }
+    Object.values(pressReleaseTidRef.current).forEach(clearTimeout); pressReleaseTidRef.current = {};
     setShowFinish(false);
     stageRef.current = 1; setStage(1);
     historyRef.current = []; setHistory([]);
@@ -797,6 +800,56 @@ function PopnGame() {
     if(fileInput) fileInput.value = "";
     gsRef.current = "idle"; setGs("idle"); setNotes([]); setJudg(null); setPressed({});
   }, [stopBGM]);
+
+  // ── 弾けるパーティクル演出／レーン発光演出（DOM直操作） ──────────────
+  // gameLoopが毎フレーム再描画するため、Reactのstateだけに頼るとCSSアニメーションが
+  // 再生の途中で何度もリセットされて止まって見えてしまう。Reactの再描画とは無関係に
+  // 動作するよう、DOM要素を直接生成・削除する方式にしている。
+  const spawnBurst = useCallback((li) => {
+    const gf = gfRef.current;
+    if (!gf) return;
+    const lanes = modeRef.current === "3K" ? LANES_3K : LANES_5K;
+    const lane = lanes[li]; if (!lane) return;
+    const laneW = 100 / lanes.length;
+    const lc = li * laneW + laneW / 2;
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = `position:absolute;left:${lc}%;top:${HIT_ZONE_Y}%;width:0;height:0;z-index:80;pointer-events:none;`;
+
+    const flash = document.createElement("div");
+    flash.style.cssText = `position:absolute;left:0;top:0;width:76px;height:76px;margin-left:-38px;margin-top:-38px;border-radius:50%;background:radial-gradient(circle,#fff 0%,${lane.color} 45%,transparent 70%);animation:burstFlash 0.55s ease-out forwards;`;
+    wrap.appendChild(flash);
+
+    [0,30,60,90,120,150,180,210,240,270,300,330].forEach(ang => {
+      const holder = document.createElement("div");
+      holder.style.cssText = `position:absolute;left:0;top:0;width:0;height:0;transform:rotate(${ang}deg);`;
+      const dot = document.createElement("div");
+      dot.style.cssText = `position:absolute;width:14px;height:14px;left:-7px;top:-7px;border-radius:50%;background:${lane.color};box-shadow:0 0 10px 3px ${lane.color};animation:burstFly 0.6s ease-out forwards;`;
+      holder.appendChild(dot);
+      wrap.appendChild(holder);
+    });
+
+    gf.appendChild(wrap);
+    setTimeout(() => { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }, 650);
+  }, []);
+
+  const spawnLaneFlash = useCallback((li, label) => {
+    const gf = gfRef.current;
+    if (!gf) return;
+    const lanes = modeRef.current === "3K" ? LANES_3K : LANES_5K;
+    const lane = lanes[li]; if (!lane) return;
+    const laneW = 100 / lanes.length;
+    const isCool = label === "COOL";
+    const bg = isCool
+      ? "linear-gradient(180deg, rgba(255,63,164,0) 0%, rgba(255,214,0,0.5) 30%, rgba(0,229,255,0.8) 60%, rgba(105,255,71,0.8) 85%, rgba(255,63,164,0.4) 100%)"
+      : `linear-gradient(180deg,${lane.color}00 0%,${lane.color}55 40%,${lane.color}cc 85%,${lane.color}44 100%)`;
+
+    const el = document.createElement("div");
+    el.style.cssText = `position:absolute;top:0;bottom:0;left:${li*laneW}%;width:${laneW}%;pointer-events:none;background:${bg};animation:laneFlashAnim 0.18s ease-out forwards;z-index:40;`;
+    gf.appendChild(el);
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
+  }, []);
+
 
   // ── ヒット判定 ────────────────────────────────────────────────────
   const handleHit = useCallback((li) => {
@@ -823,11 +876,8 @@ function PopnGame() {
       setScore(scoreRef.current); setCombo(comboRef.current);
       setCounts({...countsRef.current}); setHealth(healthRef.current);
       setJudg({label: displayLabel, id: noteIdRef.current++, lane: li});
-      setLf(f => ({...f, [li]: { count: (f[li]?.count ?? 0) + 1, label: displayLabel }}));
-      setTimeout(() => setLf(f => ({...f, [li]: { count: Math.max(0, (f[li]?.count ?? 1) - 1), label: displayLabel }})), 150);
-      const burstId = burstIdRef.current++;
-      setBursts(b => [...b, {id: burstId, lane: li}]);
-      setTimeout(() => setBursts(b => b.filter(x => x.id !== burstId)), 500);
+      spawnLaneFlash(li, displayLabel);
+      spawnBurst(li);
       playBeep([523,587,659,784,880][li] ?? 440);
       return;
     }
@@ -847,7 +897,7 @@ function PopnGame() {
       healthRef.current = Math.max(0, healthRef.current - 15); setHealth(healthRef.current);
       if (healthRef.current <= 0) { stopBGM(); setResultRevealed(false); setGs("gameover"); gsRef.current = "gameover"; }
     }
-  }, [stopBGM]);
+  }, [stopBGM, spawnBurst, spawnLaneFlash]);
 
   // ── キーボード ───────────────────────────────────────────────────
   useEffect(() => {
@@ -1325,7 +1375,7 @@ function PopnGame() {
       ),
 
       // ゲームフィールド
-      h("div", {className:"gf", style:{flex:1,position:"relative",margin:"8px 8px 0",borderRadius:"16px 16px 0 0",overflow:"hidden",background:"linear-gradient(180deg,#0d0020 0%,#150030 100%)",border:"1px solid #220044",borderBottom:"none"}},
+      h("div", {className:"gf", ref: gfRef, style:{flex:1,position:"relative",margin:"8px 8px 0",borderRadius:"16px 16px 0 0",overflow:"hidden",background:"linear-gradient(180deg,#0d0020 0%,#150030 100%)",border:"1px solid #220044",borderBottom:"none"}},
 
         showFinish && h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,pointerEvents:"none",overflow:"hidden"}},
           h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",background:"rgba(10,0,20,0.45)",animation:"resultFadeIn 0.3s ease both"}}),
@@ -1333,13 +1383,6 @@ function PopnGame() {
         ),
 
         ...activeLanes.map((l, i) => h("div", {key:i, style:{position:"absolute",top:0,bottom:0,left:(i/activeLanes.length*100)+"%",width:(100/activeLanes.length)+"%",borderRight:i<activeLanes.length-1?"1px solid #1a0035":"none"}},
-          lf[i]?.count > 0 && (() => {
-            const isCool = lf[i].label === "COOL";
-            const bg = isCool
-              ? "linear-gradient(180deg, rgba(255,63,164,0) 0%, rgba(255,214,0,0.5) 30%, rgba(0,229,255,0.8) 60%, rgba(105,255,71,0.8) 85%, rgba(255,63,164,0.4) 100%)"
-              : `linear-gradient(180deg,${l.color}00 0%,${l.color}55 40%,${l.color}cc 85%,${l.color}44 100%)`;
-            return h("div", {style:{position:"absolute",inset:0,pointerEvents:"none",background:bg,animation:"laneFlashAnim 0.18s ease-out forwards"}});
-          })(),
           pressed[i] && h("div", {style:{position:"absolute",inset:0,background:`linear-gradient(180deg,transparent 60%,${l.glow} 100%)`}})
         )),
 
@@ -1361,19 +1404,6 @@ function PopnGame() {
         }),
 
         h("div", {style:{position:"absolute",left:0,right:0,top:HIT_ZONE_Y+"%",height:3,background:"#fff",boxShadow:"0 0 16px #fffa, 0 0 32px #fff6"}}),
-
-        bursts.map(b => {
-          const laneW = 100 / activeLanes.length;
-          const lc = b.lane * laneW + laneW / 2;
-          const color = (activeLanes[b.lane] || {}).color || "#fff";
-          const angles = [0, 45, 90, 135, 180, 225, 270, 315];
-          return h("div", {key:b.id, style:{position:"absolute",left:lc+"%",top:HIT_ZONE_Y+"%",width:0,height:0,zIndex:60,pointerEvents:"none"}},
-            h("div", {style:{position:"absolute",left:0,top:0,width:50,height:50,marginLeft:-25,marginTop:-25,borderRadius:"50%",background:`radial-gradient(circle,#fff 0%,${color} 50%,transparent 72%)`,animation:"burstFlash 0.5s ease-out forwards"}}),
-            angles.map(ang => h("div", {key:ang, style:{position:"absolute",left:0,top:0,width:0,height:0,transform:`rotate(${ang}deg)`}},
-              h("div", {style:{position:"absolute",width:12,height:12,left:-6,top:-6,borderRadius:"50%",background:color,boxShadow:`0 0 8px 2px ${color}`,animation:"burstFly 0.55s ease-out forwards"}})
-            ))
-          );
-        }),
 
         judg && (() => {
           const laneW = 100 / activeLanes.length;
@@ -1414,9 +1444,15 @@ function PopnGame() {
       h("div", {style:{display:"flex",gap:6,padding:"10px 8px calc(16px + env(safe-area-inset-bottom))",background:"#0a0018",flexShrink:0}},
         activeLanes.map((l, i) => h("div", {
           key:i, ref: el => laneRefs.current[i] = el,
-          onPointerDown: () => { setPressed(p=>({...p,[i]:true})); handleHit(i); },
-          onPointerUp:   () => setPressed(p=>({...p,[i]:false})),
-          onPointerLeave:() => setPressed(p=>({...p,[i]:false})),
+          onPointerDown: () => {
+            setPressed(p=>({...p,[i]:true}));
+            handleHit(i);
+            if (pressReleaseTidRef.current[i]) clearTimeout(pressReleaseTidRef.current[i]);
+            pressReleaseTidRef.current[i] = setTimeout(() => setPressed(p=>({...p,[i]:false})), 200);
+          },
+          onPointerUp:     () => { setPressed(p=>({...p,[i]:false})); if (pressReleaseTidRef.current[i]) clearTimeout(pressReleaseTidRef.current[i]); },
+          onPointerLeave:  () => { setPressed(p=>({...p,[i]:false})); if (pressReleaseTidRef.current[i]) clearTimeout(pressReleaseTidRef.current[i]); },
+          onPointerCancel: () => { setPressed(p=>({...p,[i]:false})); if (pressReleaseTidRef.current[i]) clearTimeout(pressReleaseTidRef.current[i]); },
           style:{flex:1,height:"clamp(56px,10vw,96px)",borderRadius:12,background:pressed[i]?`radial-gradient(circle at 50% 30%,#fff8,${l.color})`:`radial-gradient(circle at 50% 30%,${l.color}88,${l.color}33)`,border:`2px solid ${l.color}`,boxShadow:pressed[i]?`0 0 30px ${l.color},0 0 60px ${l.color}66`:`0 0 10px ${l.color}55`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:2,transform:pressed[i]?"scaleY(0.92)":"scaleY(1)",transition:"transform 0.06s,box-shadow 0.06s,background 0.06s",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation"}
         },
           h("div", {style:{width:"clamp(22px,4vw,36px)",height:"clamp(22px,4vw,36px)",borderRadius:"50%",background:pressed[i]?"#fff":l.color,boxShadow:`0 0 8px ${l.color}`}}),
