@@ -579,7 +579,9 @@ function PopnGame() {
   const finishTidRef = useRef(null);
   const pressReleaseTidRef = useRef({});
   const laneRefs    = useRef([]);
+  const laneColRefs = useRef([]);
   const gfRef        = useRef(null);
+  const fxLayerRef   = useRef(null);
   const modeRef       = useRef("5K");
   const startRef    = useRef(0);
   const beatMsRef   = useRef(60000 / 128);
@@ -799,6 +801,7 @@ function PopnGame() {
     const fileInput = document.getElementById("bgm-file-single");
     if(fileInput) fileInput.value = "";
     gsRef.current = "idle"; setGs("idle"); setNotes([]); setJudg(null); setPressed({});
+    releaseAllLanes();
   }, [stopBGM]);
 
   // ── 弾けるパーティクル演出／レーン発光演出（DOM直操作） ──────────────
@@ -806,7 +809,7 @@ function PopnGame() {
   // 再生の途中で何度もリセットされて止まって見えてしまう。Reactの再描画とは無関係に
   // 動作するよう、DOM要素を直接生成・削除する方式にしている。
   const spawnBurst = useCallback((li) => {
-    const gf = gfRef.current;
+    const gf = fxLayerRef.current;
     if (!gf) return;
     const lanes = modeRef.current === "3K" ? LANES_3K : LANES_5K;
     const lane = lanes[li]; if (!lane) return;
@@ -834,7 +837,7 @@ function PopnGame() {
   }, []);
 
   const spawnLaneFlash = useCallback((li, label) => {
-    const gf = gfRef.current;
+    const gf = fxLayerRef.current;
     if (!gf) return;
     const lanes = modeRef.current === "3K" ? LANES_3K : LANES_5K;
     const lane = lanes[li]; if (!lane) return;
@@ -849,6 +852,40 @@ function PopnGame() {
     gf.appendChild(el);
     setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
   }, []);
+
+  // ── ボタンの押下見た目（DOM直操作。Reactのstateを経由しないので再描画や
+  //    イベント取りこぼしの影響を受けず、確実に元に戻せる） ──────────────
+  const setLanePressedVisual = useCallback((i, isPressed) => {
+    const el = laneRefs.current[i];
+    if (!el) return;
+    const lanes = modeRef.current === "3K" ? LANES_3K : LANES_5K;
+    const color = lanes[i]?.color;
+    if (!color) return;
+    if (isPressed) {
+      el.style.background = `radial-gradient(circle at 50% 30%,#fff8,${color})`;
+      el.style.boxShadow = `0 0 30px ${color},0 0 60px ${color}66`;
+      el.style.transform = "scaleY(0.92)";
+    } else {
+      el.style.background = `radial-gradient(circle at 50% 30%,${color}88,${color}33)`;
+      el.style.boxShadow = `0 0 10px ${color}55`;
+      el.style.transform = "scaleY(1)";
+    }
+    const circle = el.firstElementChild;
+    const label = el.lastElementChild;
+    if (circle) circle.style.background = isPressed ? "#fff" : color;
+    if (label) label.style.color = isPressed ? "#fff" : color;
+    const col = laneColRefs.current[i];
+    if (col) col.style.opacity = isPressed ? "1" : "0";
+  }, []);
+
+  const releaseLane = useCallback((i) => {
+    setLanePressedVisual(i, false);
+    if (pressReleaseTidRef.current[i]) { clearTimeout(pressReleaseTidRef.current[i]); pressReleaseTidRef.current[i] = null; }
+  }, [setLanePressedVisual]);
+
+  const releaseAllLanes = useCallback(() => {
+    laneRefs.current.forEach((_, i) => releaseLane(i));
+  }, [releaseLane]);
 
 
   // ── ヒット判定 ────────────────────────────────────────────────────
@@ -906,7 +943,7 @@ function PopnGame() {
       if (e.repeat) return;
       const li = lanes.findIndex(l => l.key === e.key.toLowerCase());
       if (li < 0) return;
-      setPressed(p => ({...p, [li]: true})); 
+      setLanePressedVisual(li, true);
       
       if (gsRef.current === "playing") {
         handleHit(li);
@@ -921,11 +958,25 @@ function PopnGame() {
     };
     const up = e => {
       const li = lanes.findIndex(l => l.key === e.key.toLowerCase());
-      if (li >= 0) setPressed(p => ({...p, [li]: false}));
+      if (li >= 0) releaseLane(li);
     };
     window.addEventListener("keydown", dn); window.addEventListener("keyup", up);
-    return () => { window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up); };
-  }, [handleHit, gs, mode]);
+    // どの要素でタップが終わっても確実に押下状態を解除するための保険（グローバル監視）
+    const clearAllPressed = () => releaseAllLanes();
+    window.addEventListener("pointerup", clearAllPressed);
+    window.addEventListener("pointercancel", clearAllPressed);
+    window.addEventListener("touchend", clearAllPressed);
+    window.addEventListener("touchcancel", clearAllPressed);
+    window.addEventListener("mouseup", clearAllPressed);
+    return () => {
+      window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up);
+      window.removeEventListener("pointerup", clearAllPressed);
+      window.removeEventListener("pointercancel", clearAllPressed);
+      window.removeEventListener("touchend", clearAllPressed);
+      window.removeEventListener("touchcancel", clearAllPressed);
+      window.removeEventListener("mouseup", clearAllPressed);
+    };
+  }, [handleHit, gs, mode, releaseAllLanes]);
 
   useEffect(() => {
     if (!judg) return;
@@ -1377,13 +1428,19 @@ function PopnGame() {
       // ゲームフィールド
       h("div", {className:"gf", ref: gfRef, style:{flex:1,position:"relative",margin:"8px 8px 0",borderRadius:"16px 16px 0 0",overflow:"hidden",background:"linear-gradient(180deg,#0d0020 0%,#150030 100%)",border:"1px solid #220044",borderBottom:"none"}},
 
+        // Reactの外側でDOM要素を直接出し入れするための専用レイヤー。
+        // Reactはこの中身を一切管理しないので、直接操作してもReact側の
+        // 再描画・キー管理と衝突しない（gf直下に直接appendすると
+        // Reactの子要素管理が壊れて要素が増殖するバグの原因になっていた）。
+        h("div", {ref: fxLayerRef, style:{position:"absolute",inset:0,zIndex:70,pointerEvents:"none"}}),
+
         showFinish && h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,pointerEvents:"none",overflow:"hidden"}},
           h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",background:"rgba(10,0,20,0.45)",animation:"resultFadeIn 0.3s ease both"}}),
           h("div", {style:{position:"relative",fontSize:"clamp(1.6rem,9vw,3.2rem)",fontWeight:900,letterSpacing:3,background:"linear-gradient(180deg,#fff8d8,#FFD600 45%,#FF8C00 55%,#fff8d8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 12px #FFD600cc) drop-shadow(0 3px 2px #4a2a00)",animation:"finishPop 0.9s cubic-bezier(.34,1.56,.64,1) both"}}, "FINISH!")
         ),
 
         ...activeLanes.map((l, i) => h("div", {key:i, style:{position:"absolute",top:0,bottom:0,left:(i/activeLanes.length*100)+"%",width:(100/activeLanes.length)+"%",borderRight:i<activeLanes.length-1?"1px solid #1a0035":"none"}},
-          pressed[i] && h("div", {style:{position:"absolute",inset:0,background:`linear-gradient(180deg,transparent 60%,${l.glow} 100%)`}})
+          h("div", {ref: el => laneColRefs.current[i] = el, style:{position:"absolute",inset:0,pointerEvents:"none",background:`linear-gradient(180deg,transparent 60%,${l.glow} 100%)`,opacity:0}})
         )),
 
         h("div", {style:{position:"absolute",inset:0,pointerEvents:"none",backgroundImage:"linear-gradient(0deg,rgba(100,0,200,0.05) 1px,transparent 1px)",backgroundSize:"100% 40px",animation:`scrollGrid ${ (60 / track.bpm) }s linear infinite`}}),
@@ -1427,11 +1484,11 @@ function PopnGame() {
             style.textShadow = `0 0 16px ${jColor(judg.label)}`;
           }
 
-          return h("div", {key:judg.id, style}, judg.label);
+          return h("div", {key:`judg-${judg.id}`, style}, judg.label);
         })(),
 
         cdText && h("div", {
-          key: cdText,
+          key: `cd-${cdText}`,
           style: {
             position: "absolute", top: "45%", left: "50%", transform: "translate(-50%, -50%)",
             fontSize: "8rem", fontWeight: 900, color: "#fff", textShadow: "0 0 40px #00E5FF, 0 0 20px #00E5FF",
@@ -1445,18 +1502,22 @@ function PopnGame() {
         activeLanes.map((l, i) => h("div", {
           key:i, ref: el => laneRefs.current[i] = el,
           onPointerDown: () => {
-            setPressed(p=>({...p,[i]:true}));
+            setLanePressedVisual(i, true);
             handleHit(i);
             if (pressReleaseTidRef.current[i]) clearTimeout(pressReleaseTidRef.current[i]);
-            pressReleaseTidRef.current[i] = setTimeout(() => setPressed(p=>({...p,[i]:false})), 200);
+            pressReleaseTidRef.current[i] = setTimeout(() => releaseLane(i), 180);
           },
-          onPointerUp:     () => { setPressed(p=>({...p,[i]:false})); if (pressReleaseTidRef.current[i]) clearTimeout(pressReleaseTidRef.current[i]); },
-          onPointerLeave:  () => { setPressed(p=>({...p,[i]:false})); if (pressReleaseTidRef.current[i]) clearTimeout(pressReleaseTidRef.current[i]); },
-          onPointerCancel: () => { setPressed(p=>({...p,[i]:false})); if (pressReleaseTidRef.current[i]) clearTimeout(pressReleaseTidRef.current[i]); },
-          style:{flex:1,height:"clamp(56px,10vw,96px)",borderRadius:12,background:pressed[i]?`radial-gradient(circle at 50% 30%,#fff8,${l.color})`:`radial-gradient(circle at 50% 30%,${l.color}88,${l.color}33)`,border:`2px solid ${l.color}`,boxShadow:pressed[i]?`0 0 30px ${l.color},0 0 60px ${l.color}66`:`0 0 10px ${l.color}55`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:2,transform:pressed[i]?"scaleY(0.92)":"scaleY(1)",transition:"transform 0.06s,box-shadow 0.06s,background 0.06s",userSelect:"none",WebkitUserSelect:"none",touchAction:"manipulation"}
+          onPointerUp:     () => releaseLane(i),
+          onPointerLeave:  () => releaseLane(i),
+          onPointerCancel: () => releaseLane(i),
+          onTouchEnd:      () => releaseLane(i),
+          onTouchCancel:   () => releaseLane(i),
+          onMouseUp:       () => releaseLane(i),
+          onMouseLeave:    () => releaseLane(i),
+          style:{flex:1,height:"clamp(56px,10vw,96px)",borderRadius:12,background:`radial-gradient(circle at 50% 30%,${l.color}88,${l.color}33)`,border:`2px solid ${l.color}`,boxShadow:`0 0 10px ${l.color}55`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:2,transform:"scaleY(1)",transition:"transform 0.06s,box-shadow 0.06s,background 0.06s",userSelect:"none",WebkitUserSelect:"none",touchAction:"none"}
         },
-          h("div", {style:{width:"clamp(22px,4vw,36px)",height:"clamp(22px,4vw,36px)",borderRadius:"50%",background:pressed[i]?"#fff":l.color,boxShadow:`0 0 8px ${l.color}`}}),
-          h("div", {style:{fontSize:"clamp(10px,1.8vw,16px)",fontWeight:700,color:pressed[i]?"#fff":l.color,letterSpacing:1}}, l.label)
+          h("div", {style:{width:"clamp(22px,4vw,36px)",height:"clamp(22px,4vw,36px)",borderRadius:"50%",background:l.color,boxShadow:`0 0 8px ${l.color}`}}),
+          h("div", {style:{fontSize:"clamp(10px,1.8vw,16px)",fontWeight:700,color:l.color,letterSpacing:1}}, l.label)
         ))
       )
     )
