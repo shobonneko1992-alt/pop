@@ -98,6 +98,13 @@ const LANES_3K = [
   {key:"g",label:"G",color:"#FF6D00",glow:"#FF6D0055"},
 ];
 
+// 対戦モード専用のレーン配色（シングルプレイの3Kとは独立して変更可能にするため分離）
+const LANES_VS = [
+  {key:"a",label:"A",color:"#FF3FA4",glow:"#FF3FA455"},
+  {key:"d",label:"D",color:"#FFD600",glow:"#FFD60055"},
+  {key:"g",label:"G",color:"#00E5FF",glow:"#00E5FF55"},
+];
+
 const SPEED_OPTIONS = [
   {label:"×0.5",value:0.5},{label:"×0.75",value:0.75},{label:"×1.0",value:1.0},
   {label:"×1.5",value:1.5},{label:"×2.0",value:2.0},
@@ -111,18 +118,18 @@ const LEVEL_COLORS = ["#69FF47","#00E5FF","#FFD600","#FF6D00","#FF3FA4"];
 const LEVEL_DARKS  = ["#00c830","#0088cc","#cc9900","#cc3300","#aa0066"];
 
 const CHARTS_5K = {
-  1:[[0,2],[8,0],[16,4]],
-  2:[[0,2],[4,0],[8,4],[12,2],[16,0]],
-  3:[[0,2],[2,0],[4,4],[6,2],[8,1],[10,3],[12,0],[14,2],[16,4],[18,1]],
-  4:[[0,2],[1,0],[2,4],[3,2],[4,1],[5,3],[6,0],[7,2],[8,4],[9,1],[10,3],[11,0],[12,2],[13,4],[14,1],[15,3],[16,0],[17,2],[18,4],[19,1]],
-  5:[[0,2],[0.5,0],[1,4],[2,2],[3,1],[3.5,3],[4,0],[5,2],[5.5,4],[6,1],[7,3],[7.5,0],[8,2],[9,4],[9.5,1],[10,3],[11,0],[11.5,2],[12,4],[13,1],[13.5,3],[14,0],[15,2],[15.5,4],[16,1],[17,3],[17.5,0],[18,2],[19,4],[19.5,1]],
+  1:[[0,2],[5,0],[10,4],[15,1]],
+  2:[[0,2],[3.25,0],[6.75,4],[10,1],[13.25,3],[16.75,2]],
+  3:[[0,2],[1.75,0],[3.25,4],[5,1],[6.75,3],[8.25,2],[10,0],[11.75,4],[13.25,1],[15,3],[16.75,2],[18.25,0]],
+  4:[[0,2],[0.75,0],[1.75,4],[2.5,1],[3.25,3],[4.25,2],[5,0],[5.75,4],[6.75,1],[7.5,3],[8.25,2],[9.25,0],[10,4],[10.75,1],[11.75,3],[12.5,2],[13.25,0],[14.25,4],[15,1],[15.75,3],[16.75,2],[17.5,0],[18.25,4],[19.25,1]],
+  5:[[0,2],[0.5,0],[1,4],[1.75,1],[2.25,3],[2.75,2],[3.25,0],[4,4],[4.5,1],[5,3],[5.5,2],[6,0],[6.75,4],[7.25,1],[7.75,3],[8.25,2],[9,0],[9.5,4],[10,1],[10.5,3],[11,2],[11.75,0],[12.25,4],[12.75,1],[13.25,3],[14,2],[14.5,0],[15,4],[15.5,1],[16,3],[16.75,2],[17.25,0],[17.75,4],[18.25,1],[19,3],[19.5,2]],
 };
 const CHARTS_3K = {
-  1:[[0,1],[8,0],[16,2]],
-  2:[[0,1],[4,0],[8,2],[12,1],[16,0]],
-  3:[[0,1],[2,0],[4,2],[6,1],[8,0],[10,2],[12,1],[14,0],[16,2],[18,1]],
-  4:[[0,1],[1,0],[2,2],[3,1],[4,0],[5,2],[6,1],[7,0],[8,2],[9,1],[10,0],[11,2],[12,1],[13,0],[14,2],[15,1],[16,0],[17,2],[18,1],[19,0]],
-  5:[[0,1],[0.5,0],[1,2],[2,1],[3,0],[3.5,2],[4,1],[5,0],[5.5,2],[6,1],[7,0],[7.5,2],[8,1],[9,0],[9.5,2],[10,1],[11,0],[11.5,2],[12,1],[13,0],[13.5,2],[14,1],[15,0],[15.5,2],[16,1],[17,0],[17.5,2],[18,1],[19,0],[19.5,2]],
+  1:[[0,1],[5,0],[10,2],[15,1]],
+  2:[[0,1],[3.25,0],[6.75,2],[10,1],[13.25,0],[16.75,2]],
+  3:[[0,1],[1.75,0],[3.25,2],[5,1],[6.75,0],[8.25,2],[10,1],[11.75,0],[13.25,2],[15,1],[16.75,0],[18.25,2]],
+  4:[[0,1],[0.75,0],[1.75,2],[2.5,1],[3.25,0],[4.25,2],[5,1],[5.75,0],[6.75,2],[7.5,1],[8.25,0],[9.25,2],[10,1],[10.75,0],[11.75,2],[12.5,1],[13.25,0],[14.25,2],[15,1],[15.75,0],[16.75,2],[17.5,1],[18.25,0],[19.25,2]],
+  5:[[0,1],[0.5,0],[1,2],[1.75,1],[2.25,0],[2.75,2],[3.25,1],[4,0],[4.5,2],[5,1],[5.5,0],[6,2],[6.75,1],[7.25,0],[7.75,2],[8.25,1],[9,0],[9.5,2],[10,1],[10.5,0],[11,2],[11.75,1],[12.25,0],[12.75,2],[13.25,1],[14,0],[14.5,2],[15,1],[15.5,0],[16,2],[16.75,1],[17.25,0],[17.75,2],[18.25,1],[19,0],[19.5,2]],
 };
 
 function buildChart(mode, level, targetBeats) {
@@ -408,12 +415,34 @@ function PopnGame() {
   const [resultRevealed, setResultRevealed] = useState(false);
   const [showFinish, setShowFinish] = useState(false);
 
+  // ── 対戦モード用ステート ──────────────────────────────────────────
+  const [vsScoreP1, setVsScoreP1] = useState(0);
+  const [vsScoreP2, setVsScoreP2] = useState(0);
+  const [vsComboP1, setVsComboP1] = useState(0);
+  const [vsComboP2, setVsComboP2] = useState(0);
+  const [vsHealthP1, setVsHealthP1] = useState(100);
+  const [vsHealthP2, setVsHealthP2] = useState(100);
+  const [vsJudgP1, setVsJudgP1] = useState(null);
+  const [vsJudgP2, setVsJudgP2] = useState(null);
+  const [vsNotes, setVsNotes] = useState([]);
+  const [vsTimer, setVsTimer] = useState(0);
+  const [vsResultRevealed, setVsResultRevealed] = useState(false);
+  const [vsButtonLayout, setVsButtonLayout] = useState("vertical"); // "vertical" | "horizontal"
+
   // リザルト画面（GAME OVER / STAGE CLEAR / 最終結果）に入ったら
   // まずスコアのルーレット演出だけ見せて、確定後にキャラクターや見出しを表示する
   useLayoutEffect(() => {
     if (gs === "stage_result" || gs === "final_result" || gs === "gameover") {
       setResultRevealed(false);
       const tid = setTimeout(() => setResultRevealed(true), 4000);
+      return () => clearTimeout(tid);
+    }
+  }, [gs]);
+
+  useLayoutEffect(() => {
+    if (gs === "vs_result") {
+      setVsResultRevealed(false);
+      const tid = setTimeout(() => setVsResultRevealed(true), 4000);
       return () => clearTimeout(tid);
     }
   }, [gs]);
@@ -591,6 +620,23 @@ function PopnGame() {
   const stageRef    = useRef(1);
   const historyRef  = useRef([]);
   const startHpRef  = useRef(50);
+
+  // ── 対戦モード用ref ──────────────────────────────────────────────
+  const vsChartRef    = useRef([]);
+  const vsChartIdxRef = useRef(0);
+  const vsActiveRef   = useRef([]);
+  const vsRafRef      = useRef(null);
+  const vsStartRef    = useRef(0);
+  const vsScoreP1Ref = useRef(0), vsScoreP2Ref = useRef(0);
+  const vsComboP1Ref = useRef(0), vsComboP2Ref = useRef(0);
+  const vsHealthP1Ref = useRef(100), vsHealthP2Ref = useRef(100);
+  const vsCountsP1Ref = useRef({GREAT:0,GOOD:0,MISS:0});
+  const vsCountsP2Ref = useRef({GREAT:0,GOOD:0,MISS:0});
+  const vsNoteIdRef   = useRef(0);
+  const vsLaneRefsP1 = useRef([]), vsLaneRefsP2 = useRef([]);
+  const vsLaneColRefsP1 = useRef([]), vsLaneColRefsP2 = useRef([]);
+  const vsFxLayerRefP1 = useRef(null), vsFxLayerRefP2 = useRef(null);
+  const vsPressTidP1 = useRef({}), vsPressTidP2 = useRef({});
 
   useEffect(() => { gsRef.current = gs; }, [gs]);
   useEffect(() => { speedRef.current = speed; }, [speed]);
@@ -936,6 +982,236 @@ function PopnGame() {
     }
   }, [stopBGM, spawnBurst, spawnLaneFlash]);
 
+  // ================================================================
+  // 対戦モード（1台のスマホを左右に分けて2人でプレイ）
+  // ================================================================
+
+  const vsSpawnBurst = useCallback((player, li) => {
+    const layer = (player === 1 ? vsFxLayerRefP1 : vsFxLayerRefP2).current;
+    if (!layer) return;
+    const lane = LANES_VS[li]; if (!lane) return;
+    const laneW = 100 / LANES_VS.length;
+    const lc = li * laneW + laneW / 2;
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = `position:absolute;left:${lc}%;top:${HIT_ZONE_Y}%;width:0;height:0;z-index:80;pointer-events:none;`;
+    const flash = document.createElement("div");
+    flash.style.cssText = `position:absolute;left:0;top:0;width:48px;height:48px;margin-left:-24px;margin-top:-24px;border-radius:50%;background:radial-gradient(circle,#fff 0%,${lane.color} 45%,transparent 70%);animation:burstFlash 0.5s ease-out forwards;`;
+    wrap.appendChild(flash);
+    [0,45,90,135,180,225,270,315].forEach(ang => {
+      const holder = document.createElement("div");
+      holder.style.cssText = `position:absolute;left:0;top:0;width:0;height:0;transform:rotate(${ang}deg);`;
+      const dot = document.createElement("div");
+      dot.style.cssText = `position:absolute;width:9px;height:9px;left:-4.5px;top:-4.5px;border-radius:50%;background:${lane.color};box-shadow:0 0 8px 2px ${lane.color};animation:burstFly 0.55s ease-out forwards;`;
+      holder.appendChild(dot);
+      wrap.appendChild(holder);
+    });
+    layer.appendChild(wrap);
+    setTimeout(() => { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }, 600);
+  }, []);
+
+  const vsSpawnLaneFlash = useCallback((player, li, label) => {
+    const layer = (player === 1 ? vsFxLayerRefP1 : vsFxLayerRefP2).current;
+    if (!layer) return;
+    const lane = LANES_VS[li]; if (!lane) return;
+    const laneW = 100 / LANES_VS.length;
+    const isCool = label === "COOL";
+    const bg = isCool
+      ? "linear-gradient(180deg, rgba(255,63,164,0) 0%, rgba(255,214,0,0.5) 30%, rgba(0,229,255,0.8) 60%, rgba(105,255,71,0.8) 85%, rgba(255,63,164,0.4) 100%)"
+      : `linear-gradient(180deg,${lane.color}00 0%,${lane.color}55 40%,${lane.color}cc 85%,${lane.color}44 100%)`;
+    const el = document.createElement("div");
+    el.style.cssText = `position:absolute;top:0;bottom:0;left:${li*laneW}%;width:${laneW}%;pointer-events:none;background:${bg};animation:laneFlashAnim 0.18s ease-out forwards;z-index:40;`;
+    layer.appendChild(el);
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
+  }, []);
+
+  const vsSetLanePressedVisual = useCallback((player, i, isPressed) => {
+    const laneRefs = player === 1 ? vsLaneRefsP1 : vsLaneRefsP2;
+    const colRefs  = player === 1 ? vsLaneColRefsP1 : vsLaneColRefsP2;
+    const el = laneRefs.current[i];
+    if (!el) return;
+    const color = LANES_VS[i]?.color;
+    if (!color) return;
+    if (isPressed) {
+      el.style.background = `radial-gradient(circle at 50% 30%,#fff8,${color})`;
+      el.style.boxShadow = `0 0 24px ${color},0 0 48px ${color}66`;
+      el.style.transform = "scale(0.92)";
+    } else {
+      el.style.background = `radial-gradient(circle at 50% 30%,${color}88,${color}33)`;
+      el.style.boxShadow = `0 0 10px ${color}55`;
+      el.style.transform = "scale(1)";
+    }
+    const circle = el.firstElementChild;
+    const label = el.lastElementChild;
+    if (circle) circle.style.background = isPressed ? "#fff" : color;
+    if (label) label.style.color = isPressed ? "#fff" : color;
+    const col = colRefs.current[i];
+    if (col) col.style.opacity = isPressed ? "1" : "0";
+  }, []);
+
+  const vsReleaseLane = useCallback((player, i) => {
+    vsSetLanePressedVisual(player, i, false);
+    const tidRef = player === 1 ? vsPressTidP1 : vsPressTidP2;
+    if (tidRef.current[i]) { clearTimeout(tidRef.current[i]); tidRef.current[i] = null; }
+  }, [vsSetLanePressedVisual]);
+
+  const vsReleaseAllLanes = useCallback(() => {
+    vsLaneRefsP1.current.forEach((_, i) => vsReleaseLane(1, i));
+    vsLaneRefsP2.current.forEach((_, i) => vsReleaseLane(2, i));
+  }, [vsReleaseLane]);
+
+  const vsStopBGM = useCallback(() => { if (bgmRef.current) { bgmRef.current.stop(); bgmRef.current = null; } }, []);
+
+  // ── 対戦: ヒット判定（プレイヤー1 or 2） ─────────────────────────
+  const handleHitVs = useCallback((player, li) => {
+    if (gsRef.current !== "vs_playing") return;
+    if (performance.now() - vsStartRef.current < 0) return;
+    const missKey = player === 1 ? "missedP1" : "missedP2";
+    const hitKey  = player === 1 ? "hitP1" : "hitP2";
+    const scoreRefP  = player === 1 ? vsScoreP1Ref : vsScoreP2Ref;
+    const comboRefP  = player === 1 ? vsComboP1Ref : vsComboP2Ref;
+    const countsRefP = player === 1 ? vsCountsP1Ref : vsCountsP2Ref;
+    const setScoreP  = player === 1 ? setVsScoreP1 : setVsScoreP2;
+    const setComboP  = player === 1 ? setVsComboP1 : setVsComboP2;
+    const setJudgP   = player === 1 ? setVsJudgP1 : setVsJudgP2;
+
+    const candidates = vsActiveRef.current
+      .filter(n => n.lane === li && !n[missKey] && !n[hitKey] && n.y !== undefined && n.y >= 82 && n.y <= 94)
+      .sort((a, b) => Math.abs(a.y - HIT_ZONE_Y) - Math.abs(b.y - HIT_ZONE_Y));
+
+    if (candidates.length) {
+      const best = candidates[0];
+      const isGreat = Math.abs(best.y - HIT_ZONE_Y) <= 3;
+      const label = isGreat ? "GREAT" : "GOOD";
+      // HPを使わない対戦モードでは、10コンボ以上でのGREATをCOOL演出扱いにする
+      const displayLabel = (isGreat && comboRefP.current >= 10) ? "COOL" : label;
+      best[hitKey] = true;
+      comboRefP.current++;
+      countsRefP.current[label]++;
+      scoreRefP.current += (label === "GREAT" ? 100 : 70) * (isGreat ? 10 : 7);
+      setScoreP(scoreRefP.current); setComboP(comboRefP.current);
+      setJudgP({label: displayLabel, id: vsNoteIdRef.current++, lane: li});
+      vsSpawnLaneFlash(player, li, displayLabel);
+      vsSpawnBurst(player, li);
+      playBeep([523,587,659,784,880][li] ?? 440);
+      return;
+    }
+
+    const approaching = vsActiveRef.current.find(n => n.lane === li && !n[missKey] && !n[hitKey] && n.y !== undefined && n.y >= 0 && n.y < 82);
+    if (approaching) {
+      comboRefP.current = 0; setComboP(0);
+      countsRefP.current.MISS++;
+      setJudgP({label:"MISS", id: vsNoteIdRef.current++, lane: li});
+    }
+  }, [vsSpawnBurst, vsSpawnLaneFlash]);
+
+  // ── 対戦: ゲームループ（2人分のノーツ位置更新をまとめて処理） ──────
+  // HPゲージを使わないため、MISSしても曲は止まらず必ず最後までプレイできる
+  const vsGameLoop = useCallback(() => {
+    if (gsRef.current !== "vs_playing") return;
+    const elapsed  = performance.now() - vsStartRef.current;
+    const travelMs = BASE_TRAVEL_MS / speedRef.current;
+
+    while (vsChartIdxRef.current < vsChartRef.current.length) {
+      const {beat, lane, id} = vsChartRef.current[vsChartIdxRef.current];
+      if (beat * beatMsRef.current - elapsed <= travelMs) {
+        vsActiveRef.current.push({id, lane, hitTime: beat * beatMsRef.current, missedP1:false, missedP2:false, hitP1:false, hitP2:false});
+        vsChartIdxRef.current++;
+      } else break;
+    }
+
+    vsActiveRef.current = vsActiveRef.current.map(n => {
+      const y = (elapsed - (n.hitTime - travelMs)) / travelMs * HIT_ZONE_Y;
+      if (y > 94) {
+        if (!n.missedP1 && !n.hitP1) {
+          n.missedP1 = true;
+          vsComboP1Ref.current = 0; setVsComboP1(0);
+          vsCountsP1Ref.current.MISS++;
+        }
+        if (!n.missedP2 && !n.hitP2) {
+          n.missedP2 = true;
+          vsComboP2Ref.current = 0; setVsComboP2(0);
+          vsCountsP2Ref.current.MISS++;
+        }
+      }
+      return {...n, y};
+    });
+
+    vsActiveRef.current = vsActiveRef.current.filter(n => n.y < 120);
+    setVsNotes([...vsActiveRef.current]);
+    setVsTimer(elapsed / 1000);
+
+    if (vsChartIdxRef.current >= vsChartRef.current.length && vsActiveRef.current.length === 0) {
+      vsStopBGM();
+      setVsResultRevealed(false);
+      setGs("vs_result"); gsRef.current = "vs_result";
+      return;
+    }
+    vsRafRef.current = requestAnimationFrame(vsGameLoop);
+  }, [vsStopBGM]);
+
+  // ── 対戦: ゲーム開始 ───────────────────────────────────────────────
+  const startVersus = useCallback((lv, sp) => {
+    vsStopBGM();
+    const currentTrack = trackRef.current;
+    const rawBpm = Number(currentTrack.bpm);
+    const safeBpm = Number.isFinite(rawBpm) && rawBpm > 0 ? rawBpm : 128;
+    currentTrack.bpm = safeBpm;
+    beatMsRef.current = 60000 / safeBpm;
+    speedRef.current = sp; setSpeed(sp);
+
+    const startPlaying = (durationSec) => {
+      const travelMs = BASE_TRAVEL_MS / sp;
+      const targetBeats = durationSec ? Math.max(30, Math.ceil((durationSec / 60) * safeBpm)) : 100;
+      vsChartRef.current = buildChart("3K", lv, targetBeats).filter(n => n.beat * beatMsRef.current >= 2000 + travelMs);
+      vsChartIdxRef.current = 0; vsActiveRef.current = [];
+      vsScoreP1Ref.current = 0; vsScoreP2Ref.current = 0;
+      vsComboP1Ref.current = 0; vsComboP2Ref.current = 0;
+      vsHealthP1Ref.current = 100; vsHealthP2Ref.current = 100;
+      vsCountsP1Ref.current = {GREAT:0,GOOD:0,MISS:0}; vsCountsP2Ref.current = {GREAT:0,GOOD:0,MISS:0};
+      setVsScoreP1(0); setVsScoreP2(0); setVsComboP1(0); setVsComboP2(0);
+      setVsHealthP1(100); setVsHealthP2(100); setVsJudgP1(null); setVsJudgP2(null);
+      setVsNotes([]); setVsTimer(0);
+      vsReleaseAllLanes();
+
+      vsStartRef.current = performance.now() + 3000;
+      setGs("vs_playing"); gsRef.current = "vs_playing";
+      vsRafRef.current = requestAnimationFrame(vsGameLoop);
+    };
+
+    const loadAndStart = async () => {
+      let audioUrl = "";
+      let isBlob = false;
+      if (currentTrack.file) { audioUrl = URL.createObjectURL(currentTrack.file); isBlob = true; }
+      else if (currentTrack.fileName) { const res = await getAudioSrc(currentTrack.fileName); audioUrl = res.url; isBlob = res.isBlob; }
+      else if (currentTrack.path) { audioUrl = currentTrack.path; }
+
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        audio.volume = 0.5;
+        audio.addEventListener('loadedmetadata', () => startPlaying(audio.duration), {once:true});
+        audio.addEventListener('error', () => startPlaying(60), {once:true});
+        const tid = setTimeout(() => audio.play().catch(() => {}), 3000);
+        bgmRef.current = {stop: () => { clearTimeout(tid); audio.pause(); audio.currentTime = 0; if (isBlob) URL.revokeObjectURL(audioUrl); }};
+        audio.load();
+      } else {
+        startPlaying(60);
+      }
+    };
+    loadAndStart();
+  }, [vsStopBGM, vsGameLoop, vsReleaseAllLanes]);
+
+  useEffect(() => () => cancelAnimationFrame(vsRafRef.current), []);
+
+  // ── 対戦: メニューへ戻る ────────────────────────────────────────────
+  const returnToMenuVs = useCallback(() => {
+    cancelAnimationFrame(vsRafRef.current); vsStopBGM();
+    Object.values(vsPressTidP1.current).forEach(clearTimeout); vsPressTidP1.current = {};
+    Object.values(vsPressTidP2.current).forEach(clearTimeout); vsPressTidP2.current = {};
+    vsReleaseAllLanes();
+    gsRef.current = "idle"; setGs("idle");
+  }, [vsStopBGM, vsReleaseAllLanes]);
+
   // ── キーボード ───────────────────────────────────────────────────
   useEffect(() => {
     const lanes = mode === "3K" ? LANES_3K : LANES_5K;
@@ -962,7 +1238,7 @@ function PopnGame() {
     };
     window.addEventListener("keydown", dn); window.addEventListener("keyup", up);
     // どの要素でタップが終わっても確実に押下状態を解除するための保険（グローバル監視）
-    const clearAllPressed = () => releaseAllLanes();
+    const clearAllPressed = () => { releaseAllLanes(); vsReleaseAllLanes(); };
     window.addEventListener("pointerup", clearAllPressed);
     window.addEventListener("pointercancel", clearAllPressed);
     window.addEventListener("touchend", clearAllPressed);
@@ -976,7 +1252,7 @@ function PopnGame() {
       window.removeEventListener("touchcancel", clearAllPressed);
       window.removeEventListener("mouseup", clearAllPressed);
     };
-  }, [handleHit, gs, mode, releaseAllLanes]);
+  }, [handleHit, gs, mode, releaseAllLanes, vsReleaseAllLanes]);
 
   useEffect(() => {
     if (!judg) return;
@@ -994,6 +1270,7 @@ function PopnGame() {
   const mm = s => String(Math.floor(s / 60)).padStart(2,"0") + ":" + String(Math.floor(s % 60)).padStart(2,"0");
 
   const cdText = timer < 0 ? Math.ceil(-timer) : null;
+  const vsCdText = vsTimer < 0 ? Math.ceil(-vsTimer) : null;
 
   // ================================================================
   // IDLE画面
@@ -1008,7 +1285,19 @@ function PopnGame() {
           h("img", {src:charSprites[0], style:{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
         )
       ),
-      h("div", {style:{color:"#8855bb",fontSize:13,letterSpacing:4,marginBottom:24}}, "RHYTHM GAME"),
+      h("div", {style:{color:"#8855bb",fontSize:13,letterSpacing:4,marginBottom:20}}, "RHYTHM GAME"),
+
+      // モード選択（1P SINGLE / 2P VERSUS）
+      h("div", {style:{display:"flex",justifyContent:"center",gap:8,marginBottom:26}},
+        h("button", {
+          onClick: () => {},
+          style:{padding:"9px 22px",borderRadius:50,border:"2px solid #FF3FA4",background:"linear-gradient(135deg,#FF3FA4,#8B00FF)",color:"#fff",fontWeight:900,fontSize:12,letterSpacing:1,cursor:"pointer",boxShadow:"0 0 16px #FF3FA4aa"}
+        }, "👤 1P SINGLE"),
+        h("button", {
+          onClick: () => { setGs("vs_setup"); gsRef.current = "vs_setup"; },
+          style:{padding:"9px 22px",borderRadius:50,border:"2px solid #FFD600",background:"transparent",color:"#FFD600",fontWeight:900,fontSize:12,letterSpacing:1,cursor:"pointer"}
+        }, "⚔ 2P VERSUS")
+      ),
 
       // MODE
       h("div", {style:{marginBottom:18}},
@@ -1058,8 +1347,110 @@ function PopnGame() {
           onMouseEnter: e => e.currentTarget.style.transform="scale(1.07)",
           onMouseLeave: e => e.currentTarget.style.transform="scale(1)"
         }, "🛠 CUSTOMIZE (譜面登録)"),
-        
+
         stage > 1 && h("div", {style:{fontSize:13,color:"#69FF47",letterSpacing:1}}, "SCORE: " + history.reduce((a,c)=>a+c.score,0).toLocaleString() + " | HP 引き継ぎ: " + Math.floor(startHpRef.current) + "%")
+      )
+    )
+  );
+
+  // ================================================================
+  // 対戦モード セットアップ画面
+  // ================================================================
+  if (gs === "vs_setup") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",overflowX:"hidden",overflowY:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)"}},
+    h("div", {style:{textAlign:"center",width:"100%",maxWidth:720,padding:"28px 5vw 48px"}},
+
+      h("div", {style:{fontSize:"clamp(1.6rem,7vw,2.6rem)",fontWeight:900,letterSpacing:4,color:"#FFD600",filter:"drop-shadow(0 0 16px #FFD600aa)",marginBottom:6}}, "⚔ 対戦モード"),
+      h("div", {style:{color:"#8855bb",fontSize:12,letterSpacing:2,marginBottom:28}}, "向かい合って3ボタン対戦"),
+
+      // LEVEL
+      h("div", {style:{marginBottom:22}},
+        h("div", {style:{color:"#8855bb",fontSize:11,letterSpacing:3,marginBottom:10}}, "LEVEL"),
+        h("div", {style:{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}},
+          LEVEL_OPTIONS.map(lv => h("button", {
+            key: lv.value,
+            onClick: () => setLevel(lv.value),
+            style:{padding:"10px 16px",borderRadius:12,border:`2px solid ${level===lv.value?LEVEL_COLORS[lv.value-1]:"#330066"}`,background:level===lv.value?LEVEL_COLORS[lv.value-1]:"transparent",color:level===lv.value?"#000":LEVEL_COLORS[lv.value-1],fontWeight:900,fontSize:13,cursor:"pointer",minWidth:64,boxShadow:level===lv.value?`0 0 16px ${LEVEL_COLORS[lv.value-1]}aa`:"none"}
+          }, lv.label, h("div", {style:{fontSize:9,fontWeight:700,marginTop:2}}, lv.desc)))
+        )
+      ),
+
+      // SPEED
+      h("div", {style:{marginBottom:28}},
+        h("div", {style:{color:"#8855bb",fontSize:11,letterSpacing:3,marginBottom:10}}, "SPEED"),
+        h("div", {style:{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}},
+          SPEED_OPTIONS.map(sp => h("button", {
+            key: sp.value,
+            onClick: () => setSpeed(sp.value),
+            style:{padding:"10px 18px",borderRadius:50,border:`1px solid ${speed===sp.value?"#FFD600":"#330066"}`,background:speed===sp.value?"linear-gradient(135deg,#FFD600,#FF6D00)":"transparent",color:speed===sp.value?"#000":"#8855bb",fontWeight:800,fontSize:13,cursor:"pointer"}
+          }, sp.label))
+        )
+      ),
+
+      // BGM CONFIG（シングルプレイと共通のtrack設定を使う）
+      h("div", {style:{marginBottom:32, background:"rgba(0,0,0,0.4)", padding:"20px", borderRadius:"16px", border:"1px solid #330066"}},
+        h("div", {style:{color:"#8855bb",fontSize:12,letterSpacing:4,marginBottom:14}}, "MP3 FILE"),
+        h("div", {style:{display:"flex",gap:12,alignItems:"center",justifyContent:"center",flexWrap:"wrap"}},
+          h("div", {
+            style:{flex:1, minWidth:"180px", padding:"12px 16px",borderRadius:10,border:"1px solid #330066",background:"#050008",color:(track.file||track.path)?"#00E5FF":"#666",fontWeight:700,fontSize:13,textAlign:"left",letterSpacing:1,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}
+          }, track.fileName ? `♪ ${track.fileName}` : "未選択（無音）"),
+          h("div", {style:{display:"flex",gap:8,position:"relative"}},
+            h("button", {
+              title: "MP3ファイルを選択",
+              onClick: () => { const el = document.getElementById("bgm-file-single"); if(el) el.click(); },
+              style:{width:44,height:44,borderRadius:10,background:"#1a0035",border:"1px solid #330066",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:20,flexShrink:0,color:"#fff"}
+            }, "📁"),
+            h("input", {id: "bgm-file-single", type:"file", accept:"audio/*", style:{opacity:0, position:"absolute", zIndex:-1, width:1, height:1}, onChange: handleFileChange}),
+            (track.file || track.path) && h("button", {
+              title: "未選択に戻す",
+              onClick: () => { trackRef.current = DEFAULT_TRACK; setTrack(DEFAULT_TRACK); const el = document.getElementById("bgm-file-single"); if(el) el.value = ""; },
+              style:{width:44,height:44,borderRadius:10,background:"transparent",border:"1px solid #FF3FA4",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:16,flexShrink:0,color:"#FF3FA4"}
+            }, "✖")
+          )
+        )
+      ),
+
+      // BUTTON LAYOUT
+      h("div", {style:{marginBottom:22}},
+        h("div", {style:{color:"#8855bb",fontSize:11,letterSpacing:3,marginBottom:10}}, "BUTTON LAYOUT"),
+        h("div", {style:{display:"flex",gap:10,justifyContent:"center"}},
+          h("button", {
+            onClick: () => setVsButtonLayout("vertical"),
+            style:{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"12px 20px",borderRadius:14,border:`2px solid ${vsButtonLayout==="vertical"?"#FFD600":"#330066"}`,background:vsButtonLayout==="vertical"?"rgba(255,214,0,0.12)":"transparent",cursor:"pointer"}
+          },
+            h("div", {style:{display:"flex",flexDirection:"column",gap:3}},
+              h("div", {style:{width:26,height:9,borderRadius:3,background:"#FF3FA4"}}),
+              h("div", {style:{width:26,height:9,borderRadius:3,background:"#FFD600"}}),
+              h("div", {style:{width:26,height:9,borderRadius:3,background:"#00E5FF"}})
+            ),
+            h("div", {style:{color:vsButtonLayout==="vertical"?"#FFD600":"#8855bb",fontSize:11,fontWeight:800}}, "縦並び")
+          ),
+          h("button", {
+            onClick: () => setVsButtonLayout("horizontal"),
+            style:{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"12px 20px",borderRadius:14,border:`2px solid ${vsButtonLayout==="horizontal"?"#FFD600":"#330066"}`,background:vsButtonLayout==="horizontal"?"rgba(255,214,0,0.12)":"transparent",cursor:"pointer"}
+          },
+            h("div", {style:{display:"flex",flexDirection:"row",gap:3}},
+              h("div", {style:{width:9,height:26,borderRadius:3,background:"#FF3FA4"}}),
+              h("div", {style:{width:9,height:26,borderRadius:3,background:"#FFD600"}}),
+              h("div", {style:{width:9,height:26,borderRadius:3,background:"#00E5FF"}})
+            ),
+            h("div", {style:{color:vsButtonLayout==="horizontal"?"#FFD600":"#8855bb",fontSize:11,fontWeight:800}}, "横並び")
+          )
+        )
+      ),
+
+
+
+      h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:16}},
+        h("button", {
+          onClick: () => { if (!isMeasuringBpm) startVersus(level, speed); },
+          disabled: isMeasuringBpm,
+          style:{background: isMeasuringBpm ? "#331a44" : "linear-gradient(135deg,#FFD600,#FF6D00)",border:"none",borderRadius:50,padding:"16px 56px",color:"#000",fontSize:16,fontWeight:900,letterSpacing:3,cursor: isMeasuringBpm ? "not-allowed" : "pointer",boxShadow: isMeasuringBpm ? "none" : "0 0 40px #FFD600aa",opacity: isMeasuringBpm ? 0.6 : 1}
+        }, isMeasuringBpm ? "BPM測定中..." : "⚔ 対戦スタート"),
+
+        h("button", {
+          onClick: () => { setGs("idle"); gsRef.current = "idle"; },
+          style:{background:"transparent",border:"1px solid #330066",borderRadius:50,padding:"10px 32px",color:"#8855bb",fontSize:13,fontWeight:700,cursor:"pointer"}
+        }, "◀ BACK (戻る)")
       )
     )
   );
@@ -1522,6 +1913,145 @@ function PopnGame() {
       )
     )
   );
+
+  // ================================================================
+  // 対戦モード プレイ画面（左右2分割、2Pエリアは180度回転）
+  // ================================================================
+  if (gs === "vs_playing") {
+    const renderHalf = (player) => {
+      const score  = player === 1 ? vsScoreP1 : vsScoreP2;
+      const combo  = player === 1 ? vsComboP1 : vsComboP2;
+      const judg   = player === 1 ? vsJudgP1 : vsJudgP2;
+      const laneRefs    = player === 1 ? vsLaneRefsP1 : vsLaneRefsP2;
+      const laneColRefs = player === 1 ? vsLaneColRefsP1 : vsLaneColRefsP2;
+      const fxLayerRefP = player === 1 ? vsFxLayerRefP1 : vsFxLayerRefP2;
+      const pressTidRef = player === 1 ? vsPressTidP1 : vsPressTidP2;
+      const hitKey  = player === 1 ? "hitP1" : "hitP2";
+      const myNotes = vsNotes.filter(n => !n[hitKey]);
+      const laneW = 100 / 3;
+
+      return h("div", {style:{flex:1,minWidth:0,display:"flex",flexDirection:"column",background:"#0a0010",height:"100%"}},
+        // ミニHUD（HPゲージなし。曲は最後まで止まらない）
+        h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",padding:"8px 8px 4px",flexShrink:0,gap:2}},
+          h("div", {style:{color:player===1?"#FF3FA4":"#00E5FF",fontSize:9,letterSpacing:2,fontWeight:900}}, player===1 ? "1P" : "2P"),
+          h("div", {style:{color:"#fff",fontSize:"clamp(13px,4vw,20px)",fontWeight:800,fontFamily:"monospace"}}, score.toLocaleString().padStart(6,"0")),
+          h("div", {style:{fontSize:combo>=10?18:13,fontWeight:900,color:combo>=50?"#FFD600":combo>=20?"#00E5FF":"#8855bb",fontFamily:"monospace",minHeight:18}}, combo > 1 ? combo+"combo" : "")
+        ),
+
+        // ゲームフィールド
+        h("div", {style:{flex:1,position:"relative",margin:"0 6px 6px",borderRadius:12,overflow:"hidden",background:"linear-gradient(180deg,#0d0020 0%,#150030 100%)",border:"1px solid #220044"}},
+          h("div", {ref: fxLayerRefP, style:{position:"absolute",inset:0,zIndex:70,pointerEvents:"none"}}),
+
+          ...LANES_VS.map((l, i) => h("div", {key:i, style:{position:"absolute",top:0,bottom:0,left:(i*laneW)+"%",width:laneW+"%",borderRight:i<2?"1px solid #1a0035":"none"}},
+            h("div", {ref: el => laneColRefs.current[i] = el, style:{position:"absolute",inset:0,pointerEvents:"none",background:`linear-gradient(180deg,transparent 60%,${l.glow} 100%)`,opacity:0}})
+          )),
+
+          ...myNotes.map(note => {
+            const lane = LANES_VS[note.lane]; if (!lane) return null;
+            const noteW = laneW * 0.82;
+            const lc = note.lane * laneW + laneW / 2;
+            const drawH = 40;
+            return h("div", {key:note.id, style:{position:"absolute",left:`calc(${lc}% - ${noteW/2}%)`,width:`calc(${noteW}% - 4px)`,top:note.y+"%",height:drawH,borderRadius:8,background:`linear-gradient(180deg,${lane.color}ff,${lane.color}99)`,boxShadow:`0 0 12px ${lane.color}`,transform:"translateY(-50%)",border:"1px solid #fff"}},
+              h("div", {style:{position:"absolute",top:2,left:4,right:4,height:4,borderRadius:4,background:"rgba(255,255,255,0.5)"}})
+            );
+          }),
+
+          h("div", {style:{position:"absolute",left:0,right:0,top:HIT_ZONE_Y+"%",height:2,background:"#fff",boxShadow:"0 0 12px #fffa"}}),
+
+          judg && (() => {
+            const lc = judg.lane * laneW + laneW / 2;
+            const isCool = judg.label === "COOL";
+            const style = {
+              position:"absolute",left:lc+"%",top:"72%",transform:"translate(-50%,-50%)",
+              fontSize:12,fontWeight:900,letterSpacing:1,
+              animation:"judgePop 0.6s ease-out forwards",whiteSpace:"nowrap",pointerEvents:"none"
+            };
+            if (isCool) {
+              style.background = "linear-gradient(90deg, #FF3FA4, #FFD600, #00E5FF, #69FF47, #FF3FA4)";
+              style.backgroundSize = "200% auto"; style.WebkitBackgroundClip = "text"; style.WebkitTextFillColor = "transparent";
+              style.filter = "drop-shadow(0 0 6px #fff)"; style.animation = "judgePop 0.6s ease-out forwards, rainbowMove 0.8s linear infinite";
+            } else {
+              style.color = jColor(judg.label); style.textShadow = `0 0 12px ${jColor(judg.label)}`;
+            }
+            return h("div", {key:`judg-${judg.id}`, style}, judg.label);
+          })()
+        ),
+
+        // ボタン（3つ・vsButtonLayoutで縦並び/横並びを切り替え）
+        h("div", {style:{display:"flex",flexDirection:vsButtonLayout==="vertical"?"column":"row",gap:5,padding:"0 6px calc(8px + env(safe-area-inset-bottom))",flexShrink:0}},
+          LANES_VS.map((l, i) => h("div", {
+            key:i, ref: el => laneRefs.current[i] = el,
+            onPointerDown: (e) => {
+              e.preventDefault();
+              vsSetLanePressedVisual(player, i, true);
+              handleHitVs(player, i);
+              if (pressTidRef.current[i]) clearTimeout(pressTidRef.current[i]);
+              pressTidRef.current[i] = setTimeout(() => vsReleaseLane(player, i), 180);
+            },
+            onPointerUp:     () => vsReleaseLane(player, i),
+            onPointerLeave:  () => vsReleaseLane(player, i),
+            onPointerCancel: () => vsReleaseLane(player, i),
+            onTouchEnd:      () => vsReleaseLane(player, i),
+            onTouchCancel:   () => vsReleaseLane(player, i),
+            onMouseUp:       () => vsReleaseLane(player, i),
+            onMouseLeave:    () => vsReleaseLane(player, i),
+            style: vsButtonLayout==="vertical"
+              ? {height:"clamp(44px,9vh,68px)",borderRadius:10,background:`radial-gradient(circle at 50% 30%,${l.color}88,${l.color}33)`,border:`2px solid ${l.color}`,boxShadow:`0 0 8px ${l.color}55`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transform:"scale(1)",transition:"transform 0.06s,box-shadow 0.06s,background 0.06s",userSelect:"none",WebkitUserSelect:"none",touchAction:"none"}
+              : {flex:1,height:"clamp(52px,11vh,84px)",borderRadius:10,background:`radial-gradient(circle at 50% 30%,${l.color}88,${l.color}33)`,border:`2px solid ${l.color}`,boxShadow:`0 0 8px ${l.color}55`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transform:"scale(1)",transition:"transform 0.06s,box-shadow 0.06s,background 0.06s",userSelect:"none",WebkitUserSelect:"none",touchAction:"none"}
+          },
+            h("div", {style:{width:"clamp(16px,4vw,26px)",height:"clamp(16px,4vw,26px)",borderRadius:"50%",background:l.color,boxShadow:`0 0 6px ${l.color}`}})
+          ))
+        )
+      );
+    };
+
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"row",overflow:"hidden",position:"relative"}},
+      // 1P（左側・通常向き）
+      h("div", {style:{flex:1,minWidth:0,display:"flex",height:"100%"}}, renderHalf(1)),
+
+      // MENUボタン（画面左上の端・1P側）
+      h("button", {onClick:returnToMenuVs, style:{position:"absolute",top:4,left:4,zIndex:200,background:"#1a1200",border:"1px solid #FFD600",borderRadius:14,padding:"2px 8px",color:"#FFD600",fontSize:7,fontWeight:700,letterSpacing:0.5,cursor:"pointer"}}, "■ MENU"),
+
+      // 中央のカウントダウン表示
+      vsCdText && h("div", {style:{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:200,fontSize:"2.2rem",fontWeight:900,color:"#fff",textShadow:"0 0 30px #FFD600",pointerEvents:"none"}}, vsCdText),
+      h("div", {style:{position:"absolute",top:0,bottom:0,left:"50%",width:2,background:"linear-gradient(180deg,transparent,#FFD600,transparent)",zIndex:50,pointerEvents:"none"}}),
+
+      // 2P（右側・向かい合う相手から見て正しい向きになるよう180度回転）
+      h("div", {style:{flex:1,minWidth:0,display:"flex",height:"100%",transform:"rotate(180deg)"}}, renderHalf(2))
+    );
+  }
+
+  // ================================================================
+  // 対戦モード リザルト画面
+  // ================================================================
+  if (gs === "vs_result") {
+    const p1Win = vsScoreP1Ref.current > vsScoreP2Ref.current;
+    const p2Win = vsScoreP2Ref.current > vsScoreP1Ref.current;
+    const draw  = vsScoreP1Ref.current === vsScoreP2Ref.current;
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",padding:"20px 0",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)"}},
+      h("div", {style:{fontSize:"clamp(1.8rem,8vw,3rem)",fontWeight:900,letterSpacing:4,color:"#FFD600",filter:"drop-shadow(0 0 20px #FFD600aa)",marginBottom:24,textAlign:"center",opacity:vsResultRevealed?1:0,animation:vsResultRevealed?"resultFadeIn 0.6s ease":"none"}},
+        draw ? "DRAW!" : (p1Win ? "1P WIN!" : "2P WIN!")
+      ),
+
+      h("div", {style:{display:"flex",gap:16,width:"92%",maxWidth:480,marginBottom:24}},
+        [1,2].map(p => {
+          const sc = p===1 ? vsScoreP1Ref.current : vsScoreP2Ref.current;
+          const mc = p===1 ? vsCountsP1Ref.current : vsCountsP2Ref.current;
+          const win = p===1 ? p1Win : p2Win;
+          return h("div", {key:p, style:{flex:1,textAlign:"center",background:"rgba(10,0,20,0.92)",borderRadius:18,border:`1px solid ${win?"#FFD600":"#330066"}`,padding:"18px 12px",boxShadow:win?"0 0 30px #FFD60066":"none"}},
+            h("div", {style:{fontSize:11,letterSpacing:2,color:p===1?"#FF3FA4":"#00E5FF",fontWeight:900,marginBottom:8}}, p===1 ? "1P" : "2P"),
+            h("div", {style:{fontSize:"clamp(1.2rem,5vw,1.7rem)",fontWeight:900,color:"#fff",fontFamily:"monospace",marginBottom:10}}, h(AnimatedScore, {value: sc})),
+            h("div", {style:{fontSize:10,color:"#00E5FF"}}, "GREAT "+mc.GREAT),
+            h("div", {style:{fontSize:10,color:"#69FF47"}}, "GOOD "+mc.GOOD),
+            h("div", {style:{fontSize:10,color:"#FF3FA4"}}, "MISS "+mc.MISS)
+          );
+        })
+      ),
+
+      h("button", {onClick: () => { setGs("vs_setup"); gsRef.current = "vs_setup"; }, style:{background:"linear-gradient(135deg,#FFD600,#FF6D00)",border:"none",borderRadius:50,padding:"14px 44px",color:"#000",fontSize:15,fontWeight:800,letterSpacing:2,cursor:"pointer",boxShadow:"0 0 24px #FFD600aa",marginBottom:12}}, "⚔ もう一度対戦"),
+      h("button", {onClick: returnToMenuVs, style:{background:"transparent",border:"1px solid #330066",borderRadius:50,padding:"10px 32px",color:"#8855bb",fontSize:13,fontWeight:700,cursor:"pointer"}}, "MENUへ戻る")
+    );
+  }
 
   // ================================================================
   // GAME OVER画面
