@@ -297,6 +297,64 @@ function playBeep(freq) {
   }
 }
 
+// ルーレットが回転中に鳴らす小さな「チッ」というティック音
+function playTickSound() {
+  try {
+    if (!globalAudioCtx) {
+      globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (globalAudioCtx.state === "suspended") { globalAudioCtx.resume(); }
+    const ctx = globalAudioCtx;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = "square";
+    o.frequency.setValueAtTime(1400, ctx.currentTime);
+    g.gain.setValueAtTime(0.025, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.02);
+    o.start();
+    o.stop(ctx.currentTime + 0.02);
+  } catch (e) {}
+}
+
+// 数字が確定（発表）した瞬間に鳴らす「ジャン」という和音
+function playRevealChime() {
+  try {
+    if (!globalAudioCtx) {
+      globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (globalAudioCtx.state === "suspended") { globalAudioCtx.resume(); }
+    const ctx = globalAudioCtx;
+    const t0 = ctx.currentTime;
+
+    const playNote = (freq, startAt, dur, peakGain, type) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0 + startAt);
+      g.gain.setValueAtTime(0, t0 + startAt);
+      g.gain.linearRampToValueAtTime(peakGain, t0 + startAt + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + startAt + dur);
+      o.start(t0 + startAt);
+      o.stop(t0 + startAt + dur + 0.02);
+    };
+
+    // ① 駆け上がるアルペジオ（ド・ミ・ソ・高ド）
+    const arpeggio = [523.25, 659.25, 783.99, 1046.5];
+    arpeggio.forEach((freq, i) => playNote(freq, i * 0.07, 0.22, 0.11, "triangle"));
+
+    // ② 分厚い和音（ド・ミ・ソ・高ド・高ミ）を鳴らして着地
+    const chordStart = 0.30;
+    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((freq, i) => {
+      playNote(freq, chordStart, 0.9, i === 0 ? 0.10 : 0.085, "triangle");
+      playNote(freq * 2, chordStart, 0.6, 0.02, "sine"); // オクターブ上の倍音を薄く重ねて煌びやかに
+    });
+
+    // ③ 高音のキラキラしたスパークル（少しずつ遅らせて散りばめる）
+    [1568, 2093, 1760].forEach((freq, i) => playNote(freq, chordStart + 0.08 + i*0.09, 0.35, 0.045, "sine"));
+
+  } catch (e) {}
+}
+
 // ================================================================
 // DB Utility (IndexedDB for storing custom audio files)
 // ================================================================
@@ -355,35 +413,46 @@ const getAudioSrc = async (fileName) => {
 // 画面表示直後はランダムな数字が高速で切り替わり、
 // duration経過後（終盤はイージングで収束）に本当のスコアで確定する
 // ================================================================
-function AnimatedScore({ value, duration = 3000 }) {
+function AnimatedScore({ value, duration = 3000, sound = true }) {
   const [display, setDisplay] = useState(0);
+  const tickCountRef = useRef(0);
   useEffect(() => {
-    const target = Math.max(0, Math.round(value) || 0);
+    const rawTarget = Math.round(value) || 0;
+    const isNeg = rawTarget < 0;
+    const target = Math.abs(rawTarget);
     const digits = Math.max(String(target).length, 5);
     const randMax = Math.pow(10, digits) - 1;
     const startTime = performance.now();
+    tickCountRef.current = 0;
     const tid = setInterval(() => {
       const elapsed = performance.now() - startTime;
       const progress = Math.min(1, elapsed / duration);
       if (progress >= 1) {
-        setDisplay(target);
+        setDisplay(isNeg ? -target : target);
+        if (sound) playRevealChime();
         clearInterval(tid);
         return;
       }
       if (progress < 0.6) {
-        // 前半：完全ランダムな数字がくるくる回る
-        setDisplay(Math.floor(Math.random() * (randMax + 1)));
+        // 前半：完全ランダムな数字がくるくる回る（ティック音付き、間引いて鳴らす）
+        const rnd = Math.floor(Math.random() * (randMax + 1));
+        setDisplay(isNeg ? -rnd : rnd);
+        if (sound) {
+          tickCountRef.current++;
+          if (tickCountRef.current % 2 === 0) playTickSound();
+        }
       } else {
         // 後半：本当の点数に向かって徐々に収束（イージング）
         const t = (progress - 0.6) / 0.4;
         const settled = Math.round(target * t);
         const noise = Math.round(randMax * (1 - t) * 0.25);
         const jitter = noise > 0 ? (Math.floor(Math.random() * (noise * 2 + 1)) - noise) : 0;
-        setDisplay(Math.max(0, settled + jitter));
+        const mag = Math.max(0, settled + jitter);
+        setDisplay(isNeg ? -mag : mag);
       }
     }, 45);
     return () => clearInterval(tid);
-  }, [value, duration]);
+  }, [value, duration, sound]);
   return h("span", null, display.toLocaleString());
 }
 
@@ -427,7 +496,12 @@ function PopnGame() {
   const [vsNotes, setVsNotes] = useState([]);
   const [vsTimer, setVsTimer] = useState(0);
   const [vsResultRevealed, setVsResultRevealed] = useState(false);
+  const [vsRevealStep, setVsRevealStep] = useState(0); // 0:何も出さない 1:GREAT 2:GOOD 3:MISS 4:最終スコア 5:WIN/DRAW
   const [vsButtonLayout, setVsButtonLayout] = useState("vertical"); // "vertical" | "horizontal"
+  const [vsNameP1, setVsNameP1] = useState("");
+  const [vsNameP2, setVsNameP2] = useState("");
+  const [vsPenalty, setVsPenalty] = useState("");
+  const [vsPenaltyEnabled, setVsPenaltyEnabled] = useState(false);
 
   // リザルト画面（GAME OVER / STAGE CLEAR / 最終結果）に入ったら
   // まずスコアのルーレット演出だけ見せて、確定後にキャラクターや見出しを表示する
@@ -442,8 +516,15 @@ function PopnGame() {
   useLayoutEffect(() => {
     if (gs === "vs_result") {
       setVsResultRevealed(false);
-      const tid = setTimeout(() => setVsResultRevealed(true), 4000);
-      return () => clearTimeout(tid);
+      setVsRevealStep(0);
+      const tids = [
+        setTimeout(() => { setVsRevealStep(1); playBeep(660); }, 500),   // GREAT発表
+        setTimeout(() => { setVsRevealStep(2); playBeep(660); }, 1500),  // GOOD発表
+        setTimeout(() => { setVsRevealStep(3); playBeep(660); }, 2500),  // MISS発表
+        setTimeout(() => setVsRevealStep(4), 3500),  // 最終スコアのルーレット開始
+        setTimeout(() => { setVsRevealStep(5); setVsResultRevealed(true); playRevealChime(); }, 6300), // WIN/DRAW発表
+      ];
+      return () => tids.forEach(clearTimeout);
     }
   }, [gs]);
   
@@ -1101,6 +1182,7 @@ function PopnGame() {
     if (approaching) {
       comboRefP.current = 0; setComboP(0);
       countsRefP.current.MISS++;
+      // プレイ中はスコアを減らさない（MISS減点はリザルト画面でまとめて反映）
       setJudgP({label:"MISS", id: vsNoteIdRef.current++, lane: li});
     }
   }, [vsSpawnBurst, vsSpawnLaneFlash]);
@@ -1127,11 +1209,15 @@ function PopnGame() {
           n.missedP1 = true;
           vsComboP1Ref.current = 0; setVsComboP1(0);
           vsCountsP1Ref.current.MISS++;
+          setVsJudgP1({label:"MISS", id: vsNoteIdRef.current++, lane: n.lane});
+          // プレイ中はスコアを減らさない（MISS減点はリザルト画面でまとめて反映）
         }
         if (!n.missedP2 && !n.hitP2) {
           n.missedP2 = true;
           vsComboP2Ref.current = 0; setVsComboP2(0);
           vsCountsP2Ref.current.MISS++;
+          setVsJudgP2({label:"MISS", id: vsNoteIdRef.current++, lane: n.lane});
+          // プレイ中はスコアを減らさない（MISS減点はリザルト画面でまとめて反映）
         }
       }
       return {...n, y};
@@ -1407,6 +1493,47 @@ function PopnGame() {
             }, "✖")
           )
         )
+      ),
+
+      // PLAYER NAME
+      h("div", {style:{marginBottom:22, background:"rgba(0,0,0,0.4)", padding:"18px 20px", borderRadius:"16px", border:"1px solid #330066"}},
+        h("div", {style:{color:"#8855bb",fontSize:11,letterSpacing:3,marginBottom:12}}, "PLAYER NAME"),
+        h("div", {style:{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center"}},
+          h("div", {style:{display:"flex",alignItems:"center",gap:8}},
+            h("span", {style:{color:"#FF3FA4",fontSize:12,fontWeight:900}}, "1P"),
+            h("input", {
+              type:"text", value: vsNameP1, maxLength: 8, placeholder:"1P",
+              onChange: e => setVsNameP1(e.target.value),
+              style:{width:110, padding:"8px 12px", borderRadius:10, border:"1px solid #FF3FA4", background:"#050008", color:"#fff", fontSize:13, textAlign:"center"}
+            })
+          ),
+          h("div", {style:{display:"flex",alignItems:"center",gap:8}},
+            h("span", {style:{color:"#00E5FF",fontSize:12,fontWeight:900}}, "2P"),
+            h("input", {
+              type:"text", value: vsNameP2, maxLength: 8, placeholder:"2P",
+              onChange: e => setVsNameP2(e.target.value),
+              style:{width:110, padding:"8px 12px", borderRadius:10, border:"1px solid #00E5FF", background:"#050008", color:"#fff", fontSize:13, textAlign:"center"}
+            })
+          )
+        )
+      ),
+
+      // PENALTY（負けた方へのメッセージ・オンオフ切り替え可能）
+      h("div", {style:{marginBottom:22, background:"rgba(0,0,0,0.4)", padding:"18px 20px", borderRadius:"16px", border:`1px solid ${vsPenaltyEnabled?"#FF3FA4":"#330066"}`}},
+        h("div", {style:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:vsPenaltyEnabled?12:0}},
+          h("div", {style:{color:vsPenaltyEnabled?"#FF3FA4":"#8855bb",fontSize:11,letterSpacing:3}}, "負けた方へのメッセージ"),
+          h("button", {
+            onClick: () => setVsPenaltyEnabled(v => !v),
+            style:{width:38,height:20,borderRadius:10,border:"none",cursor:"pointer",position:"relative",background:vsPenaltyEnabled?"#FF3FA4":"#330066",transition:"background 0.2s",padding:0,flexShrink:0}
+          },
+            h("div", {style:{position:"absolute",top:2,left:vsPenaltyEnabled?20:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}})
+          )
+        ),
+        vsPenaltyEnabled && h("input", {
+          type:"text", value: vsPenalty, maxLength: 30, placeholder:"例：ランニング10km",
+          onChange: e => setVsPenalty(e.target.value),
+          style:{width:"100%", padding:"10px 14px", borderRadius:10, border:"1px solid #FF3FA4", background:"#050008", color:"#fff", fontSize:13, textAlign:"center", boxSizing:"border-box"}
+        })
       ),
 
       // BUTTON LAYOUT
@@ -1933,8 +2060,8 @@ function PopnGame() {
       return h("div", {style:{flex:1,minWidth:0,display:"flex",flexDirection:"column",background:"#0a0010",height:"100%"}},
         // ミニHUD（HPゲージなし。曲は最後まで止まらない）
         h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",padding:"8px 8px 4px",flexShrink:0,gap:2}},
-          h("div", {style:{color:player===1?"#FF3FA4":"#00E5FF",fontSize:9,letterSpacing:2,fontWeight:900}}, player===1 ? "1P" : "2P"),
-          h("div", {style:{color:"#fff",fontSize:"clamp(13px,4vw,20px)",fontWeight:800,fontFamily:"monospace"}}, score.toLocaleString().padStart(6,"0")),
+          h("div", {style:{color:player===1?"#FF3FA4":"#00E5FF",fontSize:9,letterSpacing:2,fontWeight:900,whiteSpace:"nowrap",maxWidth:"90%",overflow:"hidden",textOverflow:"ellipsis"}}, (player===1 ? (vsNameP1.trim()||"1P") : (vsNameP2.trim()||"2P"))),
+          h("div", {style:{color:score<0?"#FF3FA4":"#fff",fontSize:"clamp(13px,4vw,20px)",fontWeight:800,fontFamily:"monospace"}}, score < 0 ? score.toLocaleString() : score.toLocaleString().padStart(6,"0")),
           h("div", {style:{fontSize:combo>=10?18:13,fontWeight:900,color:combo>=50?"#FFD600":combo>=20?"#00E5FF":"#8855bb",fontFamily:"monospace",minHeight:18}}, combo > 1 ? combo+"combo" : "")
         ),
 
@@ -2025,31 +2152,43 @@ function PopnGame() {
   // 対戦モード リザルト画面
   // ================================================================
   if (gs === "vs_result") {
-    const p1Win = vsScoreP1Ref.current > vsScoreP2Ref.current;
-    const p2Win = vsScoreP2Ref.current > vsScoreP1Ref.current;
-    const draw  = vsScoreP1Ref.current === vsScoreP2Ref.current;
+    // MISSによる減点はここ（リザルト画面）でまとめて反映する。プレイ中の表示スコアには影響しない。
+    const finalScoreP1 = vsScoreP1Ref.current - vsCountsP1Ref.current.MISS * 100;
+    const finalScoreP2 = vsScoreP2Ref.current - vsCountsP2Ref.current.MISS * 100;
+    const p1Win = finalScoreP1 > finalScoreP2;
+    const p2Win = finalScoreP2 > finalScoreP1;
+    const draw  = finalScoreP1 === finalScoreP2;
     return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",padding:"20px 0",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)"}},
-      h("div", {style:{fontSize:"clamp(1.8rem,8vw,3rem)",fontWeight:900,letterSpacing:4,color:"#FFD600",filter:"drop-shadow(0 0 20px #FFD600aa)",marginBottom:24,textAlign:"center",opacity:vsResultRevealed?1:0,animation:vsResultRevealed?"resultFadeIn 0.6s ease":"none"}},
-        draw ? "DRAW!" : (p1Win ? "1P WIN!" : "2P WIN!")
+      vsRevealStep>=5 && h("div", {style:{fontSize:"clamp(1.8rem,8vw,3rem)",fontWeight:900,letterSpacing:4,color:"#FFD600",filter:"drop-shadow(0 0 20px #FFD600aa)",marginBottom:vsPenaltyEnabled && !draw && vsPenalty.trim() ? 10 : 24,textAlign:"center",animation:"resultFadeIn 0.6s ease"}},
+        draw ? "DRAW!" : (p1Win ? `${vsNameP1.trim()||"1P"} WIN!` : `${vsNameP2.trim()||"2P"} WIN!`)
+      ),
+
+      vsRevealStep>=5 && vsPenaltyEnabled && !draw && vsPenalty.trim() && h("div", {style:{marginBottom:24,textAlign:"center",animation:"resultFadeIn 0.6s ease 0.15s both"}},
+        h("div", {style:{fontSize:"clamp(0.95rem,4vw,1.3rem)",fontWeight:900,color:"#FF3FA4",textShadow:"0 0 12px #FF3FA488"}},
+          `${(p1Win ? vsNameP2.trim()||"2P" : vsNameP1.trim()||"1P")}：${vsPenalty.trim()}`
+        )
       ),
 
       h("div", {style:{display:"flex",gap:16,width:"92%",maxWidth:480,marginBottom:24}},
         [1,2].map(p => {
-          const sc = p===1 ? vsScoreP1Ref.current : vsScoreP2Ref.current;
+          const sc = p===1 ? finalScoreP1 : finalScoreP2;
           const mc = p===1 ? vsCountsP1Ref.current : vsCountsP2Ref.current;
           const win = p===1 ? p1Win : p2Win;
-          return h("div", {key:p, style:{flex:1,textAlign:"center",background:"rgba(10,0,20,0.92)",borderRadius:18,border:`1px solid ${win?"#FFD600":"#330066"}`,padding:"18px 12px",boxShadow:win?"0 0 30px #FFD60066":"none"}},
-            h("div", {style:{fontSize:11,letterSpacing:2,color:p===1?"#FF3FA4":"#00E5FF",fontWeight:900,marginBottom:8}}, p===1 ? "1P" : "2P"),
-            h("div", {style:{fontSize:"clamp(1.2rem,5vw,1.7rem)",fontWeight:900,color:"#fff",fontFamily:"monospace",marginBottom:10}}, h(AnimatedScore, {value: sc})),
-            h("div", {style:{fontSize:10,color:"#00E5FF"}}, "GREAT "+mc.GREAT),
-            h("div", {style:{fontSize:10,color:"#69FF47"}}, "GOOD "+mc.GOOD),
-            h("div", {style:{fontSize:10,color:"#FF3FA4"}}, "MISS "+mc.MISS)
+          const rowStyle = {fontSize:11,minHeight:15};
+          return h("div", {key:p, style:{flex:1,textAlign:"center",background:"rgba(10,0,20,0.92)",borderRadius:18,border:`1px solid ${vsRevealStep>=5 && win?"#FFD600":"#330066"}`,padding:"18px 12px",boxShadow:vsRevealStep>=5 && win?"0 0 30px #FFD60066":"none",transition:"border-color 0.4s,box-shadow 0.4s"}},
+            h("div", {style:{fontSize:11,letterSpacing:2,color:p===1?"#FF3FA4":"#00E5FF",fontWeight:900,marginBottom:10,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}, (p===1 ? (vsNameP1.trim()||"1P") : (vsNameP2.trim()||"2P"))),
+            h("div", {style:{fontSize:"clamp(1.2rem,5vw,1.7rem)",fontWeight:900,color:"#fff",fontFamily:"monospace",marginBottom:12,minHeight:"1.4em"}},
+              vsRevealStep>=4 ? h(AnimatedScore, {value: sc, duration: 2500}) : "?????"
+            ),
+            h("div", {style:{...rowStyle,color:"#00E5FF"}}, vsRevealStep>=1 ? h("span", {style:{animation:"resultFadeIn 0.4s ease"}}, "GREAT ", h(AnimatedScore, {key:"g", value: mc.GREAT, duration: 500})) : ""),
+            h("div", {style:{...rowStyle,color:"#69FF47"}}, vsRevealStep>=2 ? h("span", {style:{animation:"resultFadeIn 0.4s ease"}}, "GOOD ", h(AnimatedScore, {key:"gd", value: mc.GOOD, duration: 500})) : ""),
+            h("div", {style:{...rowStyle,color:"#FF3FA4"}}, vsRevealStep>=3 ? h("span", {style:{animation:"resultFadeIn 0.4s ease"}}, "MISS ", h(AnimatedScore, {key:"m", value: mc.MISS, duration: 500}), " (-"+(mc.MISS*100).toLocaleString()+")") : "")
           );
         })
       ),
 
-      h("button", {onClick: () => { setGs("vs_setup"); gsRef.current = "vs_setup"; }, style:{background:"linear-gradient(135deg,#FFD600,#FF6D00)",border:"none",borderRadius:50,padding:"14px 44px",color:"#000",fontSize:15,fontWeight:800,letterSpacing:2,cursor:"pointer",boxShadow:"0 0 24px #FFD600aa",marginBottom:12}}, "⚔ もう一度対戦"),
-      h("button", {onClick: returnToMenuVs, style:{background:"transparent",border:"1px solid #330066",borderRadius:50,padding:"10px 32px",color:"#8855bb",fontSize:13,fontWeight:700,cursor:"pointer"}}, "MENUへ戻る")
+      h("button", {onClick: () => { setGs("vs_setup"); gsRef.current = "vs_setup"; }, style:{background:"linear-gradient(135deg,#FFD600,#FF6D00)",border:"none",borderRadius:50,padding:"14px 44px",color:"#000",fontSize:15,fontWeight:800,letterSpacing:2,cursor:"pointer",boxShadow:"0 0 24px #FFD600aa",marginBottom:12,opacity:vsRevealStep>=5?1:0,transition:"opacity 0.5s",pointerEvents:vsRevealStep>=5?"auto":"none"}}, "⚔ もう一度対戦"),
+      h("button", {onClick: returnToMenuVs, style:{background:"transparent",border:"1px solid #330066",borderRadius:50,padding:"10px 32px",color:"#8855bb",fontSize:13,fontWeight:700,cursor:"pointer",opacity:vsRevealStep>=5?1:0,transition:"opacity 0.5s",pointerEvents:vsRevealStep>=5?"auto":"none"}}, "MENUへ戻る")
     );
   }
 
