@@ -675,6 +675,8 @@ function PopnGame() {
   }, []);
 
   const bgmRef      = useRef(null);
+  const audioElRef  = useRef(null);
+  const vsAudioElRef = useRef(null);
   const chartRef    = useRef([]);
   const chartIdxRef = useRef(0);
   const activeRef   = useRef([]);
@@ -791,7 +793,22 @@ function PopnGame() {
   // ── ゲームループ ───────────────────────────────────────────────────
   const gameLoop = useCallback(() => {
     if (gsRef.current !== "playing") return;
-    const elapsed  = performance.now() - startRef.current;
+    // ノーツの位置は常になめらかなperformance.now()ベースのタイマーで計算する。
+    // ただし、実際に音が再生され始めたら（'playing'イベント）、そして再生中も定期的に、
+    // 「タイマー上の経過時間」と「音声の本当の再生位置」がズレていないか確認し、
+    // ズレていればタイマーの基準点を音声側に合わせて校正し直す。
+    // audio.currentTimeへ直接切り替える方式だと、再生開始直後の一瞬（ブラウザが実際に
+    // 音を出し始めるまでの間）ノーツの動きが不規則に静止してしまい、その静止時間が
+    // 毎回変動するため「ランダムにズレる」ように感じられる原因になっていた。
+    const audioEl = audioElRef.current;
+    if (audioEl && !audioEl.paused && !audioEl.ended && audioEl.currentTime > 0) {
+      const now = performance.now();
+      const trueStart = now - audioEl.currentTime * 1000;
+      if (Math.abs(trueStart - startRef.current) > 15) {
+        startRef.current = trueStart;
+      }
+    }
+    const elapsed = performance.now() - startRef.current;
     const travelMs = BASE_TRAVEL_MS / speedRef.current;
 
     while (chartIdxRef.current < chartRef.current.length) {
@@ -895,18 +912,30 @@ function PopnGame() {
       if (audioUrl) {
         const audio = new Audio(audioUrl);
         audio.volume = 0.5;
+        audioElRef.current = audio;
         
         audio.addEventListener('loadedmetadata', () => {
           startPlaying(audio.duration);
         }, {once: true});
         audio.addEventListener('error', () => startPlaying(60), {once: true});
 
+        // 実際に音が鳴り始めた瞬間（'playing'イベント）を基準にノーツのタイミングを補正する。
+        // setTimeoutだけに頼ると、音声再生開始までのブラウザ側の遅延（数十〜百ms）分だけ
+        // ノーツの到達タイミングと実際の音がズレてしまうため。
+        // （なおgameLoop自体は毎フレームaudio.currentTimeを直接参照するため、この補正が
+        // 効かないケースでも実際の再生位置から自動的にズレが解消される）
+        audio.addEventListener('playing', () => {
+          startRef.current = performance.now();
+        }, {once: true});
+
         const tid = setTimeout(() => audio.play().catch(() => {}), 3000);
         bgmRef.current = {stop: () => {
           clearTimeout(tid); audio.pause(); audio.currentTime = 0; if (isBlob) URL.revokeObjectURL(audioUrl);
+          if (audioElRef.current === audio) audioElRef.current = null;
         }};
         audio.load();
       } else {
+        audioElRef.current = null;
         startPlaying(60);
       }
     };
@@ -1191,7 +1220,16 @@ function PopnGame() {
   // HPゲージを使わないため、MISSしても曲は止まらず必ず最後までプレイできる
   const vsGameLoop = useCallback(() => {
     if (gsRef.current !== "vs_playing") return;
-    const elapsed  = performance.now() - vsStartRef.current;
+    // タイミング計算の考え方はシングルプレイ側と同じ（滑らかなタイマー＋定期的な音声位置との校正）
+    const audioEl = vsAudioElRef.current;
+    if (audioEl && !audioEl.paused && !audioEl.ended && audioEl.currentTime > 0) {
+      const now = performance.now();
+      const trueStart = now - audioEl.currentTime * 1000;
+      if (Math.abs(trueStart - vsStartRef.current) > 15) {
+        vsStartRef.current = trueStart;
+      }
+    }
+    const elapsed = performance.now() - vsStartRef.current;
     const travelMs = BASE_TRAVEL_MS / speedRef.current;
 
     while (vsChartIdxRef.current < vsChartRef.current.length) {
@@ -1275,12 +1313,23 @@ function PopnGame() {
       if (audioUrl) {
         const audio = new Audio(audioUrl);
         audio.volume = 0.5;
+        vsAudioElRef.current = audio;
         audio.addEventListener('loadedmetadata', () => startPlaying(audio.duration), {once:true});
         audio.addEventListener('error', () => startPlaying(60), {once:true});
+
+        // 実際に音が鳴り始めた瞬間を基準にノーツのタイミングを補正する（詳細はシングルプレイ側と同じ）
+        audio.addEventListener('playing', () => {
+          vsStartRef.current = performance.now();
+        }, {once:true});
+
         const tid = setTimeout(() => audio.play().catch(() => {}), 3000);
-        bgmRef.current = {stop: () => { clearTimeout(tid); audio.pause(); audio.currentTime = 0; if (isBlob) URL.revokeObjectURL(audioUrl); }};
+        bgmRef.current = {stop: () => {
+          clearTimeout(tid); audio.pause(); audio.currentTime = 0; if (isBlob) URL.revokeObjectURL(audioUrl);
+          if (vsAudioElRef.current === audio) vsAudioElRef.current = null;
+        }};
         audio.load();
       } else {
+        vsAudioElRef.current = null;
         startPlaying(60);
       }
     };
