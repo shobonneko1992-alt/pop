@@ -80,7 +80,7 @@ const {useState,useEffect,useLayoutEffect,useRef,useCallback,createElement:h} = 
 // ================================================================
 // 🎵 BGM設定（ファイルは各ステージ開始時に選択）
 // ================================================================
-const DEFAULT_TRACK = { file: null, fileName: null, bpm: 128, path: null };
+const DEFAULT_TRACK = { file: null, fileName: null, bpm: 128, path: null, offset: 0 };
 
 const BASE_TRAVEL_MS = 5200;
 const HIT_ZONE_Y     = 88;
@@ -185,7 +185,7 @@ async function analyzeBPM(urlOrFile) {
     } else if (urlOrFile instanceof File || urlOrFile instanceof Blob) {
       arrayBuffer = await urlOrFile.arrayBuffer();
     } else {
-      return 130;
+      return {bpm: 130, offset: 0};
     }
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
     const sampleRate = audioBuffer.sampleRate;
@@ -224,7 +224,7 @@ async function analyzeBPM(urlOrFile) {
       }
     }
     
-    if (peaks.length < 2) return 130;
+    if (peaks.length < 2) return {bpm: 130, offset: 0};
     
     // ピーク間の間隔を集計
     let intervals = [];
@@ -243,7 +243,7 @@ async function analyzeBPM(urlOrFile) {
       return Math.round(b);
     }).filter(b => b > 0);
     
-    if (bpms.length === 0) return 130;
+    if (bpms.length === 0) return {bpm: 130, offset: 0};
     
     // 最頻値 (Mode) の集計
     const counts = {};
@@ -262,11 +262,18 @@ async function analyzeBPM(urlOrFile) {
     let finalBpm = modeBpm;
     if (finalBpm < 90) finalBpm *= 2;
     if (finalBpm > 240) finalBpm /= 2;
-    
-    return Math.round(finalBpm);
+    finalBpm = Math.round(finalBpm);
+
+    // 曲の頭から最初の拍が実際に鳴るまでの時間（前奏の長さ）を検出する。
+    // これを無視して「1拍目=曲の0秒目」と決め打ちすると、前奏の長さが曲ごとに違うため
+    // 曲によってノーツの体感ズレが毎回変わって見える大きな原因になっていた。
+    // peaks[0]は実際に検出された最初の拍の位置（秒）なので、そのままオフセットとして使う。
+    const offset = Math.max(0, peaks[0] / sampleRate);
+
+    return {bpm: finalBpm, offset};
   } catch (e) {
     console.error("BPM analysis failed:", e);
-    return 130;
+    return {bpm: 130, offset: 0};
   }
 }
 
@@ -697,6 +704,7 @@ function PopnGame() {
   const modeRef       = useRef("5K");
   const startRef    = useRef(0);
   const beatMsRef   = useRef(60000 / 128);
+  const beatOffsetMsRef = useRef(0);
   const speedRef    = useRef(1.0);
   const trackRef    = useRef(DEFAULT_TRACK);
 
@@ -768,18 +776,18 @@ function PopnGame() {
     setTrack(prev => ({...prev, file, fileName: file.name, path: null, bpm: "..."}));
     setIsMeasuringBpm(true);
     const url = URL.createObjectURL(file);
-    const bpm = await analyzeBPM(url);
-    if(bpm) setTrack(prev => ({...prev, bpm}));
-    else setTrack(prev => ({...prev, bpm: 128}));
+    const result = await analyzeBPM(url);
+    if (result && result.bpm) setTrack(prev => ({...prev, bpm: result.bpm, offset: result.offset || 0}));
+    else setTrack(prev => ({...prev, bpm: 128, offset: 0}));
     setIsMeasuringBpm(false);
   }, []);
 
   const handlePresetSelect = useCallback(async (fileName, path) => {
     setTrack({file: null, fileName, path, bpm: "..."});
     setIsMeasuringBpm(true);
-    const bpm = await analyzeBPM(path);
-    if(bpm) setTrack(prev => ({...prev, bpm}));
-    else setTrack(prev => ({...prev, bpm: 128}));
+    const result = await analyzeBPM(path);
+    if (result && result.bpm) setTrack(prev => ({...prev, bpm: result.bpm, offset: result.offset || 0}));
+    else setTrack(prev => ({...prev, bpm: 128, offset: 0}));
     setIsMeasuringBpm(false);
   }, []);
 
@@ -813,8 +821,9 @@ function PopnGame() {
 
     while (chartIdxRef.current < chartRef.current.length) {
       const {beat, lane, id} = chartRef.current[chartIdxRef.current];
-      if (beat * beatMsRef.current - elapsed <= travelMs) {
-        activeRef.current.push({id, lane, hitTime: beat * beatMsRef.current, missed: false});
+      const hitTime = beatOffsetMsRef.current + beat * beatMsRef.current;
+      if (hitTime - elapsed <= travelMs) {
+        activeRef.current.push({id, lane, hitTime, missed: false});
         chartIdxRef.current++;
       } else break;
     }
@@ -872,6 +881,8 @@ function PopnGame() {
     const safeBpm = Number.isFinite(rawBpm) && rawBpm > 0 ? rawBpm : 128; // BPM測定中(".."など)や不正値のフォールバック
     currentTrack.bpm = safeBpm;
     beatMsRef.current = 60000 / safeBpm;
+    const rawOffset = Number(customSong ? 0 : currentTrack.offset);
+    beatOffsetMsRef.current = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset * 1000 : 0;
 
     const startPlaying = (durationSec) => {
       const travelMs = BASE_TRAVEL_MS / sp;
@@ -1234,8 +1245,9 @@ function PopnGame() {
 
     while (vsChartIdxRef.current < vsChartRef.current.length) {
       const {beat, lane, id} = vsChartRef.current[vsChartIdxRef.current];
-      if (beat * beatMsRef.current - elapsed <= travelMs) {
-        vsActiveRef.current.push({id, lane, hitTime: beat * beatMsRef.current, missedP1:false, missedP2:false, hitP1:false, hitP2:false});
+      const hitTime = beatOffsetMsRef.current + beat * beatMsRef.current;
+      if (hitTime - elapsed <= travelMs) {
+        vsActiveRef.current.push({id, lane, hitTime, missedP1:false, missedP2:false, hitP1:false, hitP2:false});
         vsChartIdxRef.current++;
       } else break;
     }
@@ -1282,6 +1294,8 @@ function PopnGame() {
     const safeBpm = Number.isFinite(rawBpm) && rawBpm > 0 ? rawBpm : 128;
     currentTrack.bpm = safeBpm;
     beatMsRef.current = 60000 / safeBpm;
+    const rawOffset = Number(currentTrack.offset);
+    beatOffsetMsRef.current = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset * 1000 : 0;
     speedRef.current = sp; setSpeed(sp);
 
     const startPlaying = (durationSec) => {
