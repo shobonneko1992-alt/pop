@@ -132,7 +132,7 @@ const CHARTS_3K = {
   5:[[0,1],[0.5,0],[1,2],[1.75,1],[2.25,0],[2.75,2],[3.25,1],[4,0],[4.5,2],[5,1],[5.5,0],[6,2],[6.75,1],[7.25,0],[7.75,2],[8.25,1],[9,0],[9.5,2],[10,1],[10.5,0],[11,2],[11.75,1],[12.25,0],[12.75,2],[13.25,1],[14,0],[14.5,2],[15,1],[15.5,0],[16,2],[16.75,1],[17.25,0],[17.75,2],[18.25,1],[19,0],[19.5,2]],
 };
 
-function buildChart(mode, level, targetBeats) {
+function buildChart(mode, level, targetBeats, allowHold = true) {
   const baseBeatsLen = 20; // 1ループの基本拍数
   const fallbackTarget = 100; // 未指定時のデフォルト（100拍）
   const target = targetBeats || fallbackTarget;
@@ -172,7 +172,56 @@ function buildChart(mode, level, targetBeats) {
     });
     currentRep++;
   }
-  return chart.sort((a, b) => a.beat - b.beat);
+
+  // ── バリエーション追加：同時押し（コード）／連打ストリーム／長押し ──
+  // レベルが上がるほど出現頻度・規模を上げて、単調にならないようにする。
+  const chordChance  = [0, 0.03, 0.06, 0.10, 0.16, 0.22][level] ?? 0.08;
+  const streamChance = [0, 0.03, 0.05, 0.09, 0.14, 0.20][level] ?? 0.08;
+  const holdChance   = 0; // 長押しノーツは無効化
+
+  const extra = [];
+  const usedForHoldOrStream = new Set(); // 1つのノーツに複数の変化を重ねすぎないようにする
+  const sortedOriginal = [...chart].sort((a, b) => a.beat - b.beat);
+
+  sortedOriginal.forEach((n) => {
+    if (usedForHoldOrStream.has(n.id)) return;
+
+    // ① 長押し（ホールド）：他のバリエーションに横取りされないよう最初に判定する
+    if (allowHold && Math.random() < holdChance) {
+      const holdBeats = [1, 1, 1.5, 2][Math.floor(Math.random() * 4)];
+      n.hold = holdBeats;
+      return; // 長押しにしたノーツはコード／ストリーム化しない
+    }
+
+    // ② 同時押し（コード）：同じ拍の別レーンにもう1つノーツを追加
+    if (Math.random() < chordChance) {
+      const otherLanes = Array.from({length: numLanes}, (_, i) => i).filter(l => l !== n.lane);
+      if (otherLanes.length > 0) {
+        const chordLane = otherLanes[Math.floor(Math.random() * otherLanes.length)];
+        extra.push({beat: n.beat, lane: chordLane, id:`chord-${n.id}-${Math.random()}`});
+      }
+      return;
+    }
+
+    // ③ 連打ストリーム：同じノーツを起点に、0.25拍間隔で2〜3個の連続ノーツを追加
+    if (Math.random() < streamChance) {
+      const streamLen = Math.random() < 0.5 ? 2 : 3; // 2連 or 3連
+      const alternate = Math.random() < 0.5; // レーンを交互にするか、同レーン連打にするか
+      const otherLane = (n.lane + 1 + Math.floor(Math.random() * (numLanes - 1))) % numLanes;
+      for (let s = 1; s <= streamLen; s++) {
+        const sBeat = n.beat + s * 0.25;
+        if (sBeat <= target) {
+          const sLane = alternate ? (s % 2 === 0 ? n.lane : otherLane) : n.lane;
+          extra.push({beat: sBeat, lane: sLane, id:`stream-${n.id}-${s}-${Math.random()}`});
+          usedForHoldOrStream.add(sBeat + "-" + sLane);
+        }
+      }
+      return;
+    }
+  });
+
+  const fullChart = chart.concat(extra);
+  return fullChart.sort((a, b) => a.beat - b.beat);
 }
 
 async function analyzeBPM(urlOrFile) {
@@ -278,7 +327,7 @@ async function analyzeBPM(urlOrFile) {
 }
 
 function jColor(label) {
-  return {COOL:"#FFD600", GREAT:"#00E5FF", GOOD:"#69FF47", MISS:"#FF3FA4"}[label] ?? "#fff";
+  return {COOL:"#FFD600", GREAT:"#00E5FF", GOOD:"#69FF47", MISS:"#FF3FA4", HOLD:"#FFA500"}[label] ?? "#fff";
 }
 
 let globalAudioCtx = null;
@@ -699,6 +748,8 @@ function PopnGame() {
   const pressReleaseTidRef = useRef({});
   const laneRefs    = useRef([]);
   const laneColRefs = useRef([]);
+  const laneHeldRef   = useRef({});   // レーンごとに「今、実際に押され続けているか」を保持
+  const heldNoteIdRef = useRef({});   // レーンごとに「今ホールド中のノーツID」を保持
   const gfRef        = useRef(null);
   const fxLayerRef   = useRef(null);
   const modeRef       = useRef("5K");
@@ -820,17 +871,49 @@ function PopnGame() {
     const travelMs = BASE_TRAVEL_MS / speedRef.current;
 
     while (chartIdxRef.current < chartRef.current.length) {
-      const {beat, lane, id} = chartRef.current[chartIdxRef.current];
+      const {beat, lane, id, hold} = chartRef.current[chartIdxRef.current];
       const hitTime = beatOffsetMsRef.current + beat * beatMsRef.current;
       if (hitTime - elapsed <= travelMs) {
-        activeRef.current.push({id, lane, hitTime, missed: false});
+        activeRef.current.push({id, lane, hitTime, missed: false, hold: hold || 0, holding: false, holdDone: false});
         chartIdxRef.current++;
       } else break;
     }
 
     activeRef.current = activeRef.current.map(n => {
       const y = (elapsed - (n.hitTime - travelMs)) / travelMs * HIT_ZONE_Y;
-      if (!n.missed && n.y !== undefined && n.y > 94) {
+
+      // 長押しノーツ：最後まで保持できたかどうかをここで判定する
+      if (n.holding && !n.holdDone) {
+        const holdEnd = n.hitTime + n.hold * beatMsRef.current;
+        if (elapsed >= holdEnd) {
+          if (laneHeldRef.current[n.lane]) {
+            // 最後まで保持成功
+            n.holdDone = true;
+            comboRef.current++;
+            if (comboRef.current > maxComboRef.current) { maxComboRef.current = comboRef.current; setMaxCombo(maxComboRef.current); }
+            countsRef.current.GREAT++;
+            const total = chartRef.current.length || 1;
+            scoreRef.current = Math.round(100000 * (countsRef.current.GREAT + countsRef.current.GOOD * 0.7) / total);
+            healthRef.current = Math.min(100, healthRef.current + 2.5);
+            setScore(scoreRef.current); setCombo(comboRef.current);
+            setCounts({...countsRef.current}); setHealth(healthRef.current);
+            setJudg({label:"GREAT", id: noteIdRef.current++, lane: n.lane});
+            spawnLaneFlash(n.lane, "GREAT");
+            spawnBurst(n.lane);
+            if (heldNoteIdRef.current[n.lane] === n.id) heldNoteIdRef.current[n.lane] = null;
+          } else {
+            // releaseLane側のイベントを取りこぼした場合の保険としてここでもMISS化
+            n.missed = true;
+            comboRef.current = 0; setCombo(0);
+            countsRef.current.MISS++; setCounts({...countsRef.current});
+            setJudg({label:"MISS", id: noteIdRef.current++, lane: n.lane});
+            healthRef.current = Math.max(0, healthRef.current - 15); setHealth(healthRef.current);
+            if (healthRef.current <= 0) { stopBGM(); setResultRevealed(false); setGs("gameover"); gsRef.current = "gameover"; }
+          }
+        }
+      }
+
+      if (!n.missed && !n.holding && n.y !== undefined && n.y > 94) {
         n.missed = true; comboRef.current = 0; setCombo(0);
         countsRef.current.MISS++; setCounts({...countsRef.current});
         setJudg({label:"MISS", id: noteIdRef.current++, lane: n.lane});
@@ -845,7 +928,7 @@ function PopnGame() {
       return {...n, y};
     });
 
-    activeRef.current = activeRef.current.filter(n => n.y < 120);
+    activeRef.current = activeRef.current.filter(n => n.y < 120 && !n.holdDone);
     setNotes([...activeRef.current]);
     setTimer(elapsed / 1000);
 
@@ -898,6 +981,7 @@ function PopnGame() {
       chartIdxRef.current = 0; activeRef.current = [];
       scoreRef.current = 0; comboRef.current = 0; maxComboRef.current = 0; healthRef.current = startHpRef.current;
       countsRef.current = {GREAT:0, GOOD:0, MISS:0};
+      laneHeldRef.current = {}; heldNoteIdRef.current = {};
       setScore(0); setCombo(0); setMaxCombo(0); setHealth(startHpRef.current); setTimer(0);
       setCounts({GREAT:0,GOOD:0,MISS:0}); setNotes([]); setJudg(null); setPressed({}); setLf({});
       
@@ -1048,7 +1132,60 @@ function PopnGame() {
   const releaseLane = useCallback((i) => {
     setLanePressedVisual(i, false);
     if (pressReleaseTidRef.current[i]) { clearTimeout(pressReleaseTidRef.current[i]); pressReleaseTidRef.current[i] = null; }
-  }, [setLanePressedVisual]);
+    laneHeldRef.current[i] = false;
+
+    // 長押しノーツを保持中に指を離した場合の判定（かなり緩めに調整）
+    const heldId = heldNoteIdRef.current[i];
+    if (heldId != null && gsRef.current === "playing") {
+      const n = activeRef.current.find(nn => nn.id === heldId);
+      if (n && n.holding && !n.holdDone) {
+        const elapsedNow = performance.now() - startRef.current;
+        const holdStartTime = n.hitTime;
+        const holdEndTime = n.hitTime + (n.hold * beatMsRef.current);
+        const holdLen = Math.max(1, holdEndTime - holdStartTime);
+        const progress = (elapsedNow - holdStartTime) / holdLen; // 0=押し始め 1=最後まで保持
+
+        if (progress >= 0.75) {
+          // 終盤（75%以上）で離した場合は成功扱いにする（かなり寛容）
+          n.holdDone = true;
+          activeRef.current = activeRef.current.filter(nn => nn.id !== heldId);
+          comboRef.current++;
+          if (comboRef.current > maxComboRef.current) { maxComboRef.current = comboRef.current; setMaxCombo(maxComboRef.current); }
+          countsRef.current.GREAT++;
+          const total = chartRef.current.length || 1;
+          scoreRef.current = Math.round(100000 * (countsRef.current.GREAT + countsRef.current.GOOD * 0.7) / total);
+          healthRef.current = Math.min(100, healthRef.current + 2.5);
+          setScore(scoreRef.current); setCombo(comboRef.current);
+          setCounts({...countsRef.current}); setHealth(healthRef.current);
+          setJudg({label:"GREAT", id: noteIdRef.current++, lane: i});
+        } else if (progress >= 0.3) {
+          // 中盤で離した場合はGOOD扱い（コンボは継続、減点も小さめ）
+          activeRef.current = activeRef.current.filter(nn => nn.id !== heldId);
+          comboRef.current++;
+          if (comboRef.current > maxComboRef.current) { maxComboRef.current = comboRef.current; setMaxCombo(maxComboRef.current); }
+          countsRef.current.GOOD++;
+          const total = chartRef.current.length || 1;
+          scoreRef.current = Math.round(100000 * (countsRef.current.GREAT + countsRef.current.GOOD * 0.7) / total);
+          healthRef.current = Math.min(100, healthRef.current + 1.0);
+          setScore(scoreRef.current); setCombo(comboRef.current);
+          setCounts({...countsRef.current}); setHealth(healthRef.current);
+          setJudg({label:"GOOD", id: noteIdRef.current++, lane: i});
+        } else {
+          // かなり早い段階（押し始めてすぐ）で離した場合のみMISS
+          activeRef.current = activeRef.current.filter(nn => nn.id !== heldId);
+          comboRef.current = 0; setCombo(0);
+          countsRef.current.MISS++; setCounts({...countsRef.current});
+          setJudg({label:"MISS", id: noteIdRef.current++, lane: i});
+          setIsMissChar(true);
+          if (missCharTidRef.current) clearTimeout(missCharTidRef.current);
+          missCharTidRef.current = setTimeout(() => setIsMissChar(false), 1000);
+          healthRef.current = Math.max(0, healthRef.current - 15); setHealth(healthRef.current);
+          if (healthRef.current <= 0) { stopBGM(); setResultRevealed(false); setGs("gameover"); gsRef.current = "gameover"; }
+        }
+      }
+      heldNoteIdRef.current[i] = null;
+    }
+  }, [setLanePressedVisual, stopBGM]);
 
   const releaseAllLanes = useCallback(() => {
     laneRefs.current.forEach((_, i) => releaseLane(i));
@@ -1059,17 +1196,33 @@ function PopnGame() {
   const handleHit = useCallback((li) => {
     if (gsRef.current !== "playing") return;
     if (performance.now() - startRef.current < 0) return; // カウントダウン中は無効
+    laneHeldRef.current[li] = true;
+
     const candidates = activeRef.current
-      .filter(n => n.lane === li && !n.missed && n.y !== undefined && n.y >= 82 && n.y <= 94)
+      .filter(n => n.lane === li && !n.missed && n.y !== undefined && (n.hold > 0 ? (n.y >= 72 && n.y <= 97) : (n.y >= 82 && n.y <= 94)))
       .sort((a, b) => Math.abs(a.y - HIT_ZONE_Y) - Math.abs(b.y - HIT_ZONE_Y));
 
     if (candidates.length) {
-      // 通常ヒット
       const best  = candidates[0];
       const isGreat = Math.abs(best.y - HIT_ZONE_Y) <= 3;
       const label = isGreat ? "GREAT" : "GOOD";
       const displayLabel = (isGreat && healthRef.current === 100) ? "COOL" : label;
-      
+
+      if (best.hold > 0) {
+        // 長押しノーツの押し始め：ここでは消さずに保持状態にする
+        best.holding = true;
+        heldNoteIdRef.current[li] = best.id;
+        comboRef.current++;
+        if (comboRef.current > maxComboRef.current) { maxComboRef.current = comboRef.current; setMaxCombo(maxComboRef.current); }
+        setCombo(comboRef.current);
+        setJudg({label: "HOLD", id: noteIdRef.current++, lane: li});
+        spawnLaneFlash(li, displayLabel);
+        spawnBurst(li);
+        playBeep([523,587,659,784,880][li] ?? 440);
+        return;
+      }
+
+      // 通常ヒット
       activeRef.current = activeRef.current.filter(n => n.id !== best.id);
       comboRef.current++;
       if (comboRef.current > maxComboRef.current) { maxComboRef.current = comboRef.current; setMaxCombo(maxComboRef.current); }
@@ -1301,7 +1454,7 @@ function PopnGame() {
     const startPlaying = (durationSec) => {
       const travelMs = BASE_TRAVEL_MS / sp;
       const targetBeats = durationSec ? Math.max(30, Math.ceil((durationSec / 60) * safeBpm)) : 100;
-      vsChartRef.current = buildChart("3K", lv, targetBeats).filter(n => n.beat * beatMsRef.current >= 2000 + travelMs);
+      vsChartRef.current = buildChart("3K", lv, targetBeats, false).filter(n => n.beat * beatMsRef.current >= 2000 + travelMs);
       vsChartIdxRef.current = 0; vsActiveRef.current = [];
       vsScoreP1Ref.current = 0; vsScoreP2Ref.current = 0;
       vsComboP1Ref.current = 0; vsComboP2Ref.current = 0;
@@ -2036,6 +2189,17 @@ function PopnGame() {
           const drawH = isOnBeat ? 72 : 36;
           const drawGlow = isOnBeat ? `0 0 16px ${lane.color}, 0 0 36px #fff8` : `0 0 10px ${lane.color}`;
           const drawBorder = isOnBeat ? `2px solid #fff` : `1px solid ${lane.color}`;
+
+          if (note.hold > 0) {
+            // 長押しノーツ：保持時間の長さぶん、頭の上に帯（テール）を伸ばして描画する
+            const travelMs = BASE_TRAVEL_MS / speed;
+            const holdLenPct = (note.hold * beatMsRef.current / travelMs) * HIT_ZONE_Y;
+            return h("div", {key:note.id, style:{position:"absolute",left:`calc(${lc}% - ${noteW/2}%)`,width:`calc(${noteW}% - 8px)`,top:(note.y - holdLenPct)+"%",height:`calc(${holdLenPct}% + ${drawH}px)`,borderRadius:8,background:note.holding?`linear-gradient(180deg,${lane.color}33,${lane.color}ee)`:`linear-gradient(180deg,${lane.color}66,${lane.color}bb)`,boxShadow:note.holding?`0 0 20px ${lane.color}, 0 0 40px #fffb`:drawGlow,border:note.holding?`2px solid #fff`:drawBorder,transition:"box-shadow 0.1s"}},
+              h("div", {style:{position:"absolute",bottom:2,left:6,right:6,height:12,borderRadius:4,background:"rgba(255,255,255,0.85)"}}),
+              h("div", {style:{position:"absolute",top:2,left:6,right:6,height:6,borderRadius:4,background:"rgba(255,255,255,0.5)"}})
+            );
+          }
+
           return h("div", {key:note.id, style:{position:"absolute",left:`calc(${lc}% - ${noteW/2}%)`,width:`calc(${noteW}% - 8px)`,top:note.y+"%",height:drawH,borderRadius:8,background:`linear-gradient(180deg,${lane.color}ff,${lane.color}99)`,boxShadow:drawGlow,transform:"translateY(-50%)",border:drawBorder}},
             h("div", {style:{position:"absolute",top:2,left:6,right:6,height:isOnBeat?12:4,borderRadius:4,background:isOnBeat?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.3)"}})
           );
