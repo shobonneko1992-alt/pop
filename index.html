@@ -769,6 +769,7 @@ function PopnGame() {
   const vsActiveRef   = useRef([]);
   const vsRafRef      = useRef(null);
   const vsStartRef    = useRef(0);
+  const vsSongDurationRef = useRef(0); // 曲の総再生時間（秒）。残り時間の判定に使う
   const vsScoreP1Ref = useRef(0), vsScoreP2Ref = useRef(0);
   const vsComboP1Ref = useRef(0), vsComboP2Ref = useRef(0);
   const vsHealthP1Ref = useRef(100), vsHealthP2Ref = useRef(100);
@@ -1454,6 +1455,7 @@ function PopnGame() {
     const startPlaying = (durationSec) => {
       const travelMs = BASE_TRAVEL_MS / sp;
       const targetBeats = durationSec ? Math.max(30, Math.ceil((durationSec / 60) * safeBpm)) : 100;
+      vsSongDurationRef.current = durationSec || (targetBeats * 60 / safeBpm);
       vsChartRef.current = buildChart("3K", lv, targetBeats, false).filter(n => n.beat * beatMsRef.current >= 2000 + travelMs);
       vsChartIdxRef.current = 0; vsActiveRef.current = [];
       vsScoreP1Ref.current = 0; vsScoreP2Ref.current = 0;
@@ -2288,7 +2290,13 @@ function PopnGame() {
         // ミニHUD（HPゲージなし。曲は最後まで止まらない）
         h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",padding:"8px 8px 4px",flexShrink:0,gap:2}},
           h("div", {style:{color:player===1?"#FF3FA4":"#00E5FF",fontSize:9,letterSpacing:2,fontWeight:900,whiteSpace:"nowrap",maxWidth:"90%",overflow:"hidden",textOverflow:"ellipsis"}}, (player===1 ? (vsNameP1.trim()||"1P") : (vsNameP2.trim()||"2P"))),
-          h("div", {style:{color:score<0?"#FF3FA4":"#fff",fontSize:"clamp(13px,4vw,20px)",fontWeight:800,fontFamily:"monospace"}}, score < 0 ? score.toLocaleString() : score.toLocaleString().padStart(6,"0")),
+          (() => {
+            const remainingSec = vsSongDurationRef.current - vsTimer;
+            const scoreHidden = vsTimer > 0 && remainingSec <= 15 && remainingSec > -3;
+            return h("div", {style:{color:scoreHidden?"#FFD600":(score<0?"#FF3FA4":"#fff"),fontSize:"clamp(13px,4vw,20px)",fontWeight:800,fontFamily:"monospace"}},
+              scoreHidden ? "??????" : (score < 0 ? score.toLocaleString() : score.toLocaleString().padStart(6,"0"))
+            );
+          })(),
           h("div", {style:{fontSize:combo>=10?18:13,fontWeight:900,color:combo>=50?"#FFD600":combo>=20?"#00E5FF":"#8855bb",fontFamily:"monospace",minHeight:18}}, combo > 1 ? combo+"combo" : "")
         ),
 
