@@ -2401,10 +2401,10 @@ function PopnGame() {
           const sc = p===1 ? finalScoreP1 : finalScoreP2;
           const mc = p===1 ? vsCountsP1Ref.current : vsCountsP2Ref.current;
           const win = p===1 ? p1Win : p2Win;
-          const rowStyle = {fontSize:11,minHeight:15};
+          const rowStyle = {fontSize:16.5,minHeight:22};
           return h("div", {key:p, style:{flex:1,textAlign:"center",background:"rgba(10,0,20,0.92)",borderRadius:18,border:`1px solid ${vsRevealStep>=5 && win?"#FFD600":"#330066"}`,padding:"18px 12px",boxShadow:vsRevealStep>=5 && win?"0 0 30px #FFD60066":"none",transition:"border-color 0.4s,box-shadow 0.4s"}},
-            h("div", {style:{fontSize:11,letterSpacing:2,color:p===1?"#FF3FA4":"#00E5FF",fontWeight:900,marginBottom:10,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}, (p===1 ? (vsNameP1.trim()||"1P") : (vsNameP2.trim()||"2P"))),
-            h("div", {style:{fontSize:"clamp(1.2rem,5vw,1.7rem)",fontWeight:900,color:"#fff",fontFamily:"monospace",marginBottom:12,minHeight:"1.4em"}},
+            h("div", {style:{fontSize:16.5,letterSpacing:2,color:p===1?"#FF3FA4":"#00E5FF",fontWeight:900,marginBottom:10,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}, (p===1 ? (vsNameP1.trim()||"1P") : (vsNameP2.trim()||"2P"))),
+            h("div", {style:{fontSize:"clamp(1.5rem,6.25vw,2.125rem)",fontWeight:900,color:"#fff",fontFamily:"monospace",marginBottom:12,minHeight:"1.4em"}},
               vsRevealStep>=4 ? h(AnimatedScore, {value: sc, duration: 2500}) : "?????"
             ),
             h("div", {style:{...rowStyle,color:"#00E5FF"}}, vsRevealStep>=1 ? h("span", {style:{animation:"resultFadeIn 0.4s ease"}}, "GREAT ", h(AnimatedScore, {key:"g", value: mc.GREAT, duration: 500})) : ""),
