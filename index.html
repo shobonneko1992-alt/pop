@@ -50,6 +50,40 @@
       75%{transform:scale(1.02) translateY(-10px) rotate(5deg)}
       100%{transform:scale(1) translateY(0) rotate(0deg)}
     }
+    /* ── FEVERモード：画面外周の脈動ネオンボーダー ────────────────── */
+    @keyframes feverBorderPulse{
+      0%{box-shadow:inset 0 0 18px 4px #FF3FA4cc, inset 0 0 40px 10px #00E5FF66;}
+      50%{box-shadow:inset 0 0 34px 9px #FFD600ee, inset 0 0 64px 18px #FF3FA499;}
+      100%{box-shadow:inset 0 0 18px 4px #00E5FFcc, inset 0 0 40px 10px #69FF4766;}
+    }
+    /* ── コンボマイルストーン：中央ポップアップ ──────────────────── */
+    @keyframes milestonePop{
+      0%{opacity:0; transform:translate(-50%,-50%) scale(0.4) rotate(-6deg);}
+      15%{opacity:1; transform:translate(-50%,-50%) scale(1.15) rotate(2deg);}
+      30%{transform:translate(-50%,-50%) scale(0.98) rotate(-1deg);}
+      80%{opacity:1; transform:translate(-50%,-50%) scale(1) rotate(0deg);}
+      100%{opacity:0; transform:translate(-50%,-50%) scale(1.05) rotate(0deg);}
+    }
+    @keyframes milestoneGlow{
+      0%,100%{filter:drop-shadow(0 0 14px #FFD600cc) drop-shadow(0 0 30px #FF3FA488);}
+      50%{filter:drop-shadow(0 0 26px #00E5FFcc) drop-shadow(0 0 46px #FFD600aa);}
+    }
+    /* ── 紙吹雪（Confetti）：ネオン発光するデジタルパーティクルの降下軌道 ── */
+    @keyframes confettiFall{
+      0%{transform:translate3d(0,114vh,0); opacity:0;}
+      6%{opacity:1;}
+      100%{transform:translate3d(var(--drift,0px), -14vh, 0); opacity:0.95;}
+    }
+    /* 光の明滅（グリッチ的なチラつき） */
+    @keyframes confettiFlicker{
+      0%,100%{opacity:1;}
+      50%{opacity:0.3;}
+    }
+    /* ── 曲名表示画面：5秒かけて減っていくロードバー ─────────────────── */
+    @keyframes introProgress{
+      0%{width:100%;}
+      100%{width:0%;}
+    }
   </style>
 </head>
 <body>
@@ -330,6 +364,33 @@ function jColor(label) {
   return {COOL:"#FFD600", GREAT:"#00E5FF", GOOD:"#69FF47", MISS:"#FF3FA4", HOLD:"#FFA500"}[label] ?? "#fff";
 }
 
+// ================================================================
+// 🔊 触覚フィードバック（Haptics）
+// タップ判定に応じて短い振動パターンを発火する。
+// navigator.vibrate 非対応環境（PCブラウザ等）では何もしない。
+// ================================================================
+function triggerHaptic(label) {
+  try {
+    if (!navigator.vibrate) return;
+    switch (label) {
+      case "COOL":  navigator.vibrate(15); break;
+      case "GREAT": navigator.vibrate(8); break;
+      case "GOOD":  navigator.vibrate(5); break;
+      case "MISS":  navigator.vibrate([30, 50, 30]); break;
+      default: break;
+    }
+  } catch (e) {}
+}
+
+// ================================================================
+// 🎚 コンボに応じた効果音のピッチ上昇
+// 1コンボあたり+15Hz、最大+300Hzまで上昇させる補正値を返す。
+// ================================================================
+function comboPitchBonus(combo) {
+  const c = Math.max(0, (combo || 0) - 1);
+  return Math.min(300, c * 15);
+}
+
 let globalAudioCtx = null;
 function playBeep(freq) {
   try {
@@ -512,7 +573,72 @@ function AnimatedScore({ value, duration = 3000, sound = true }) {
   return h("span", null, display.toLocaleString());
 }
 
+// ================================================================
+// 🎊 リザルト画面の紙吹雪（Confetti）
+// ── デジタル / ネオン仕様 ──
+// 現実の紙吹雪ではなく、ゲーム内で使われているネオンカラー
+// （マゼンタ/シアン/イエロー/ライム/オレンジ/パープル）で発光する
+// 「光の破片」を降らせる。ライトビーム・ダイヤ型グリントの2種を
+// mix-blend-mode:screen で暗い背景に溶け込ませ、
+// スタイリッシュなHUD風エフェクトにする。
+// ================================================================
+const CONFETTI_COLORS = ["#FF3FA4", "#FFD600", "#00E5FF", "#69FF47", "#FF8A00", "#B24BFF"];
+const CONFETTI_SHAPES = ["beam", "diamond"];
 
+function confettiShapeNode(p) {
+  const c = p.color;
+  if (p.shape === "beam") {
+    // 縦に流れる発光ビーム（グラデーションでフェードするライン）
+    return h("div", {style:{
+      width:"100%", height:"100%",
+      background:`linear-gradient(180deg, transparent, ${c} 30%, ${c} 70%, transparent)`,
+      boxShadow:`0 0 6px ${c}, 0 0 14px ${c}88`,
+      borderRadius:2,
+      animation:`confettiFlicker ${p.flickerDuration}s ease-in-out infinite`,
+    }});
+  }
+  // diamond：45度回転した発光ダイヤ（グリント）
+  return h("div", {style:{
+    width:"100%", height:"100%",
+    background:`linear-gradient(135deg, ${c}, #ffffff55)`,
+    border:`1px solid ${c}`,
+    boxShadow:`0 0 10px ${c}cc`,
+    transform:"rotate(45deg)",
+    animation:`confettiFlicker ${p.flickerDuration}s ease-in-out infinite`,
+  }});
+}
+
+function Confetti({ count = 50 }) {
+  const particles = useState(() => Array.from({length: count}, (_, i) => {
+    const shape = CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)];
+    const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    const isBeam = shape === "beam";
+    const w = isBeam ? 3 + Math.random() * 2 : 6 + Math.random() * 4;
+    const hh = isBeam ? 18 + Math.random() * 18 : w;
+    return {
+      id: i, shape, color,
+      left: Math.random() * 100,
+      delay: Math.random() * 2.2,
+      fallDuration: 1.8 + Math.random() * 2.0,
+      flickerDuration: 0.35 + Math.random() * 0.6,
+      w, h: hh,
+      drift: Math.round((Math.random() - 0.5) * 110),
+    };
+  }))[0];
+
+  return h("div", {style:{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none",zIndex:60,mixBlendMode:"screen"}},
+    particles.map(p => h("div", {
+      key: p.id,
+      style:{
+        position:"absolute", top:0, left:p.left+"%",
+        width:p.w, height:p.h,
+        "--drift": p.drift + "px",
+        animation:`confettiFall ${p.fallDuration}s linear ${p.delay}s infinite`,
+        willChange:"transform",
+      }
+    }, confettiShapeNode(p)))
+  );
+}
 
 // ================================================================
 // メインコンポーネント
@@ -539,6 +665,9 @@ function PopnGame() {
   const [isMeasuringBpm, setIsMeasuringBpm] = useState(false);
   const [resultRevealed, setResultRevealed] = useState(false);
   const [showFinish, setShowFinish] = useState(false);
+  const [showFinishVs, setShowFinishVs] = useState(false);
+  const [songIntro, setSongIntro] = useState(null); // {title, m, lv, sp, customSong} プレイ開始前に曲名を表示する画面用
+  const [comboMilestone, setComboMilestone] = useState(null); // {value, id} 50コンボ刻みで一瞬表示するテロップ
 
   // ── 対戦モード用ステート ──────────────────────────────────────────
   const [vsScoreP1, setVsScoreP1] = useState(0);
@@ -745,6 +874,8 @@ function PopnGame() {
   const gsRef       = useRef("idle");
   const noteIdRef   = useRef(0);
   const finishTidRef = useRef(null);
+  const finishTidVsRef = useRef(null);
+  const songIntroTidRef = useRef(null);
   const pressReleaseTidRef = useRef({});
   const laneRefs    = useRef([]);
   const laneColRefs = useRef([]);
@@ -901,6 +1032,7 @@ function PopnGame() {
             setJudg({label:"GREAT", id: noteIdRef.current++, lane: n.lane});
             spawnLaneFlash(n.lane, "GREAT");
             spawnBurst(n.lane);
+            triggerHaptic("GREAT");
             if (heldNoteIdRef.current[n.lane] === n.id) heldNoteIdRef.current[n.lane] = null;
           } else {
             // releaseLane側のイベントを取りこぼした場合の保険としてここでもMISS化
@@ -908,6 +1040,7 @@ function PopnGame() {
             comboRef.current = 0; setCombo(0);
             countsRef.current.MISS++; setCounts({...countsRef.current});
             setJudg({label:"MISS", id: noteIdRef.current++, lane: n.lane});
+            triggerHaptic("MISS");
             healthRef.current = Math.max(0, healthRef.current - 15); setHealth(healthRef.current);
             if (healthRef.current <= 0) { stopBGM(); setResultRevealed(false); setGs("gameover"); gsRef.current = "gameover"; }
           }
@@ -918,6 +1051,7 @@ function PopnGame() {
         n.missed = true; comboRef.current = 0; setCombo(0);
         countsRef.current.MISS++; setCounts({...countsRef.current});
         setJudg({label:"MISS", id: noteIdRef.current++, lane: n.lane});
+        triggerHaptic("MISS");
         healthRef.current = Math.max(0, healthRef.current - 15); setHealth(healthRef.current);
         
         setIsMissChar(true);
@@ -1040,10 +1174,23 @@ function PopnGame() {
 
   useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
 
+  // ── 曲決定後、プレイ画面に入る前に曲名を5秒間表示する ──────────────────
+  const startGameWithIntro = useCallback((m, lv, sp, customSong = null) => {
+    const title = customSong ? customSong.name : (trackRef.current.fileName || "STANDARD (自動生成譜面)");
+    setSongIntro({title, m, lv, sp, customSong});
+    setGs("song_intro"); gsRef.current = "song_intro";
+    songIntroTidRef.current = setTimeout(() => {
+      songIntroTidRef.current = null;
+      startGame(m, lv, sp, customSong);
+    }, 5000);
+  }, [startGame]);
+
   // ── メニューへ戻る ─────────────────────────────────────────────────
   const returnToMenu = useCallback(() => {
     cancelAnimationFrame(rafRef.current); stopBGM();
     if (finishTidRef.current) { clearTimeout(finishTidRef.current); finishTidRef.current = null; }
+    if (songIntroTidRef.current) { clearTimeout(songIntroTidRef.current); songIntroTidRef.current = null; }
+    setSongIntro(null);
     Object.values(pressReleaseTidRef.current).forEach(clearTimeout); pressReleaseTidRef.current = {};
     setShowFinish(false);
     stageRef.current = 1; setStage(1);
@@ -1096,8 +1243,8 @@ function PopnGame() {
     const laneW = 100 / lanes.length;
     const isCool = label === "COOL";
     const bg = isCool
-      ? "linear-gradient(180deg, rgba(255,63,164,0) 0%, rgba(255,214,0,0.5) 30%, rgba(0,229,255,0.8) 60%, rgba(105,255,71,0.8) 85%, rgba(255,63,164,0.4) 100%)"
-      : `linear-gradient(180deg,${lane.color}00 0%,${lane.color}55 40%,${lane.color}cc 85%,${lane.color}44 100%)`;
+      ? "linear-gradient(180deg, rgba(255,63,164,0) 0%, rgba(255,214,0,0.75) 25%, rgba(0,229,255,0.95) 55%, rgba(105,255,71,0.95) 85%, rgba(255,63,164,0.6) 100%)"
+      : `linear-gradient(180deg,${lane.color}00 0%,${lane.color}88 30%,${lane.color}f2 70%,${lane.color}77 100%)`;
 
     const el = document.createElement("div");
     el.style.cssText = `position:absolute;top:0;bottom:0;left:${li*laneW}%;width:${laneW}%;pointer-events:none;background:${bg};animation:laneFlashAnim 0.18s ease-out forwards;z-index:40;`;
@@ -1159,6 +1306,7 @@ function PopnGame() {
           setScore(scoreRef.current); setCombo(comboRef.current);
           setCounts({...countsRef.current}); setHealth(healthRef.current);
           setJudg({label:"GREAT", id: noteIdRef.current++, lane: i});
+          triggerHaptic("GREAT");
         } else if (progress >= 0.3) {
           // 中盤で離した場合はGOOD扱い（コンボは継続、減点も小さめ）
           activeRef.current = activeRef.current.filter(nn => nn.id !== heldId);
@@ -1171,12 +1319,14 @@ function PopnGame() {
           setScore(scoreRef.current); setCombo(comboRef.current);
           setCounts({...countsRef.current}); setHealth(healthRef.current);
           setJudg({label:"GOOD", id: noteIdRef.current++, lane: i});
+          triggerHaptic("GOOD");
         } else {
           // かなり早い段階（押し始めてすぐ）で離した場合のみMISS
           activeRef.current = activeRef.current.filter(nn => nn.id !== heldId);
           comboRef.current = 0; setCombo(0);
           countsRef.current.MISS++; setCounts({...countsRef.current});
           setJudg({label:"MISS", id: noteIdRef.current++, lane: i});
+          triggerHaptic("MISS");
           setIsMissChar(true);
           if (missCharTidRef.current) clearTimeout(missCharTidRef.current);
           missCharTidRef.current = setTimeout(() => setIsMissChar(false), 1000);
@@ -1219,7 +1369,8 @@ function PopnGame() {
         setJudg({label: "HOLD", id: noteIdRef.current++, lane: li});
         spawnLaneFlash(li, displayLabel);
         spawnBurst(li);
-        playBeep([523,587,659,784,880][li] ?? 440);
+        triggerHaptic(displayLabel);
+        playBeep(([523,587,659,784,880][li] ?? 440) + comboPitchBonus(comboRef.current));
         return;
       }
 
@@ -1236,7 +1387,8 @@ function PopnGame() {
       setJudg({label: displayLabel, id: noteIdRef.current++, lane: li});
       spawnLaneFlash(li, displayLabel);
       spawnBurst(li);
-      playBeep([523,587,659,784,880][li] ?? 440);
+      triggerHaptic(displayLabel);
+      playBeep(([523,587,659,784,880][li] ?? 440) + comboPitchBonus(comboRef.current));
       return;
     }
 
@@ -1247,6 +1399,7 @@ function PopnGame() {
       comboRef.current = 0; setCombo(0);
       countsRef.current.MISS++; setCounts({...countsRef.current});
       setJudg({label:"MISS", id: noteIdRef.current++, lane: li});
+      triggerHaptic("MISS");
       
       setIsMissChar(true);
       if (missCharTidRef.current) clearTimeout(missCharTidRef.current);
@@ -1292,8 +1445,8 @@ function PopnGame() {
     const laneW = 100 / LANES_VS.length;
     const isCool = label === "COOL";
     const bg = isCool
-      ? "linear-gradient(180deg, rgba(255,63,164,0) 0%, rgba(255,214,0,0.5) 30%, rgba(0,229,255,0.8) 60%, rgba(105,255,71,0.8) 85%, rgba(255,63,164,0.4) 100%)"
-      : `linear-gradient(180deg,${lane.color}00 0%,${lane.color}55 40%,${lane.color}cc 85%,${lane.color}44 100%)`;
+      ? "linear-gradient(180deg, rgba(255,63,164,0) 0%, rgba(255,214,0,0.75) 25%, rgba(0,229,255,0.95) 55%, rgba(105,255,71,0.95) 85%, rgba(255,63,164,0.6) 100%)"
+      : `linear-gradient(180deg,${lane.color}00 0%,${lane.color}88 30%,${lane.color}f2 70%,${lane.color}77 100%)`;
     const el = document.createElement("div");
     el.style.cssText = `position:absolute;top:0;bottom:0;left:${li*laneW}%;width:${laneW}%;pointer-events:none;background:${bg};animation:laneFlashAnim 0.18s ease-out forwards;z-index:40;`;
     layer.appendChild(el);
@@ -1368,7 +1521,8 @@ function PopnGame() {
       setJudgP({label: displayLabel, id: vsNoteIdRef.current++, lane: li});
       vsSpawnLaneFlash(player, li, displayLabel);
       vsSpawnBurst(player, li);
-      playBeep([523,587,659,784,880][li] ?? 440);
+      triggerHaptic(displayLabel);
+      playBeep(([523,587,659,784,880][li] ?? 440) + comboPitchBonus(comboRefP.current));
       return;
     }
 
@@ -1378,6 +1532,7 @@ function PopnGame() {
       countsRefP.current.MISS++;
       // プレイ中はスコアを減らさない（MISS減点はリザルト画面でまとめて反映）
       setJudgP({label:"MISS", id: vsNoteIdRef.current++, lane: li});
+      triggerHaptic("MISS");
     }
   }, [vsSpawnBurst, vsSpawnLaneFlash]);
 
@@ -1433,8 +1588,15 @@ function PopnGame() {
 
     if (vsChartIdxRef.current >= vsChartRef.current.length && vsActiveRef.current.length === 0) {
       vsStopBGM();
-      setVsResultRevealed(false);
-      setGs("vs_result"); gsRef.current = "vs_result";
+      // 最後のノーツが消えたら、すぐリザルトへ行かずプレイ画面に「FINISH!」を重ねて表示
+      setShowFinishVs(true);
+      finishTidVsRef.current = setTimeout(() => {
+        finishTidVsRef.current = null;
+        setShowFinishVs(false);
+        if (gsRef.current !== "vs_playing") return; // 途中でMENUに戻った場合は何もしない
+        setVsResultRevealed(false);
+        setGs("vs_result"); gsRef.current = "vs_result";
+      }, 2500);
       return;
     }
     vsRafRef.current = requestAnimationFrame(vsGameLoop);
@@ -1507,9 +1669,24 @@ function PopnGame() {
 
   useEffect(() => () => cancelAnimationFrame(vsRafRef.current), []);
 
+  // ── 対戦: 曲決定後、プレイ画面に入る前に曲名を5秒間表示する ──────────────
+  const startVersusWithIntro = useCallback((lv, sp) => {
+    const title = trackRef.current.fileName || "STANDARD (自動生成譜面)";
+    setSongIntro({title, lv, sp, vs:true});
+    setGs("song_intro"); gsRef.current = "song_intro";
+    songIntroTidRef.current = setTimeout(() => {
+      songIntroTidRef.current = null;
+      startVersus(lv, sp);
+    }, 5000);
+  }, [startVersus]);
+
   // ── 対戦: メニューへ戻る ────────────────────────────────────────────
   const returnToMenuVs = useCallback(() => {
     cancelAnimationFrame(vsRafRef.current); vsStopBGM();
+    if (finishTidVsRef.current) { clearTimeout(finishTidVsRef.current); finishTidVsRef.current = null; }
+    if (songIntroTidRef.current) { clearTimeout(songIntroTidRef.current); songIntroTidRef.current = null; }
+    setSongIntro(null);
+    setShowFinishVs(false);
     Object.values(vsPressTidP1.current).forEach(clearTimeout); vsPressTidP1.current = {};
     Object.values(vsPressTidP2.current).forEach(clearTimeout); vsPressTidP2.current = {};
     vsReleaseAllLanes();
@@ -1563,6 +1740,18 @@ function PopnGame() {
     const t = setTimeout(() => setJudg(null), 700);
     return () => clearTimeout(t);
   }, [judg]);
+
+  // ── コンボマイルストーン演出：50コンボ刻みで「FEVER! XX COMBO!」を0.8秒表示 ──
+  useEffect(() => {
+    if (combo > 0 && combo % 50 === 0) {
+      setComboMilestone({value: combo, id: Date.now()});
+      const t = setTimeout(() => setComboMilestone(null), 800);
+      return () => clearTimeout(t);
+    }
+  }, [combo]);
+
+  // ── 背景フィーバーモード：50コンボ以上で有効化 ──────────────────────
+  const isFever = combo >= 50;
 
   // ── 集計 ──────────────────────────────────────────────────────────
   const totalNotes = chartRef.current.length || 1;
@@ -1787,7 +1976,7 @@ function PopnGame() {
 
       h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:16}},
         h("button", {
-          onClick: () => { if (!isMeasuringBpm) startVersus(level, speed); },
+          onClick: () => { if (!isMeasuringBpm) startVersusWithIntro(level, speed); },
           disabled: isMeasuringBpm,
           style:{background: isMeasuringBpm ? "#331a44" : "linear-gradient(135deg,#FFD600,#FF6D00)",border:"none",borderRadius:50,padding:"16px 56px",color:"#000",fontSize:16,fontWeight:900,letterSpacing:3,cursor: isMeasuringBpm ? "not-allowed" : "pointer",boxShadow: isMeasuringBpm ? "none" : "0 0 40px #FFD600aa",opacity: isMeasuringBpm ? 0.6 : 1}
         }, isMeasuringBpm ? "BPM測定中..." : "⚔ 対戦スタート"),
@@ -1856,7 +2045,7 @@ function PopnGame() {
         h("div", {style:{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}},
           customSongs.map(song => h("button", {
             key: song.id,
-            onClick: () => startGame(mode, level, speed, song),
+            onClick: () => startGameWithIntro(mode, level, speed, song),
             style:{padding:"12px 24px",borderRadius:12,background:"linear-gradient(135deg,#00E5FF,#0088cc)",border:"none",color:"#000",fontWeight:"bold",cursor:"pointer",boxShadow:"0 0 10px #00E5FFaa",display:"flex",flexDirection:"column",alignItems:"center"}
           }, 
             h("span", {style:{fontSize:16}}, `♪ ${song.name}`),
@@ -1868,7 +2057,7 @@ function PopnGame() {
       // 操作ボタン群
       h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:20}},
         h("button", {
-          onClick: () => { if (!isMeasuringBpm) startGame(mode, level, speed, null); },
+          onClick: () => { if (!isMeasuringBpm) startGameWithIntro(mode, level, speed, null); },
           disabled: isMeasuringBpm,
           style:{background: isMeasuringBpm ? "#331a44" : "linear-gradient(135deg,#FF3FA4,#8B00FF)",border:"none",borderRadius:50,padding:"16px 56px",color:"#fff",fontSize:16,fontWeight:900,letterSpacing:3,cursor: isMeasuringBpm ? "not-allowed" : "pointer",boxShadow: isMeasuringBpm ? "none" : "0 0 40px #FF3FA4aa",opacity: isMeasuringBpm ? 0.6 : 1,transition:"transform 0.1s"},
           onMouseEnter: e => { if(!isMeasuringBpm) e.currentTarget.style.transform="scale(1.05)"; },
@@ -2114,9 +2303,35 @@ function PopnGame() {
   }
 
   // ================================================================
+  // 曲決定後、プレイ開始前に曲名を5秒間表示する画面
+  // ================================================================
+  if (gs === "song_intro" && songIntro) return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",position:"relative"}},
+    h("button", {onClick: songIntro.vs ? returnToMenuVs : returnToMenu, style:{position:"absolute",top:12,left:12,background:"transparent",border:"1px solid #330066",borderRadius:20,padding:"4px 14px",color:"#8855bb",fontSize:11,fontWeight:700,letterSpacing:2,cursor:"pointer"}}, "■ MENU"),
+
+    h("div", {style:{color:"#8855bb",fontSize:13,letterSpacing:6,marginBottom:20,animation:"resultFadeIn 0.5s ease"}}, songIntro.vs ? "VS MATCH — NOW LOADING" : "NOW LOADING"),
+
+    h("div", {style:{fontSize:"clamp(1.3rem,7vw,2.4rem)",fontWeight:900,letterSpacing:2,textAlign:"center",padding:"0 8vw",maxWidth:"100%",wordBreak:"break-word",background:"linear-gradient(90deg,#FF3FA4,#FFD600,#00E5FF,#69FF47,#FF3FA4)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 16px #FF3FA466)",animation:"rainbowMove 2.2s linear infinite, resultFadeIn 0.6s ease"}}, `♪ ${songIntro.title}`),
+
+    h("div", {style:{color:"#666",fontSize:12,letterSpacing:2,marginTop:14,marginBottom:40}}, songIntro.vs ? `2P対戦  LV.${songIntro.lv}  SPEED x${songIntro.sp}` : `${songIntro.m}  LV.${songIntro.lv}  SPEED x${songIntro.sp}`),
+
+    h("div", {style:{width:"60%",maxWidth:320,height:6,borderRadius:6,background:"#220044",overflow:"hidden"}},
+      h("div", {style:{height:"100%",borderRadius:6,background:"linear-gradient(90deg,#FF3FA4,#FFD600,#00E5FF,#69FF47)",animation:"introProgress 5s linear forwards"}})
+    )
+  );
+
+  // ================================================================
   // PLAYING画面
   // ================================================================
   if (gs === "playing") return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",position:"relative"}},
+
+    // ── 背景フィーバーモード：50コンボ以上で画面外周に脈動するネオンボーダーを表示 ──
+    h("div", {style:{position:"absolute",inset:0,zIndex:5,pointerEvents:"none",opacity:isFever?1:0,transition:"opacity 0.4s ease",animation:isFever?"feverBorderPulse 1s ease-in-out infinite":"none"}}),
+
+    // ── コンボマイルストーン演出：50コンボ刻みで中央にネオン風テロップをポップアップ ──
+    comboMilestone && h("div", {key:`milestone-${comboMilestone.id}`, style:{position:"absolute",top:"38%",left:"50%",zIndex:150,pointerEvents:"none",textAlign:"center",animation:"milestonePop 0.8s cubic-bezier(.34,1.56,.64,1) forwards"}},
+      h("div", {style:{fontSize:"clamp(1.4rem,7vw,2.6rem)",fontWeight:900,letterSpacing:3,background:"linear-gradient(90deg,#FF3FA4,#FFD600,#00E5FF,#69FF47,#FF3FA4)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"rainbowMove 0.8s linear infinite, milestoneGlow 0.8s ease-in-out infinite",whiteSpace:"nowrap"}}, `FEVER! ${comboMilestone.value} COMBO!`)
+    ),
+
     h("div", {style:{width:"100%",maxWidth:760,height:"var(--app-h)",display:"flex",flexDirection:"column",zIndex:10}},
 
       // HUD
@@ -2172,11 +2387,11 @@ function PopnGame() {
 
         showFinish && h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,pointerEvents:"none",overflow:"hidden"}},
           h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",background:"rgba(10,0,20,0.45)",animation:"resultFadeIn 0.3s ease both"}}),
-          h("div", {style:{position:"relative",fontSize:"clamp(1.6rem,9vw,3.2rem)",fontWeight:900,letterSpacing:3,background:"linear-gradient(180deg,#fff8d8,#FFD600 45%,#FF8C00 55%,#fff8d8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 12px #FFD600cc) drop-shadow(0 3px 2px #4a2a00)",animation:"finishPop 0.9s cubic-bezier(.34,1.56,.64,1) both"}}, "FINISH!")
+          h("div", {style:{position:"relative",top:"-6vh",fontSize:"clamp(1.6rem,9vw,3.2rem)",fontWeight:900,letterSpacing:3,background:"linear-gradient(180deg,#fff8d8,#FFD600 45%,#FF8C00 55%,#fff8d8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 12px #FFD600cc) drop-shadow(0 3px 2px #4a2a00)",animation:"finishPop 0.9s cubic-bezier(.34,1.56,.64,1) both"}}, "FINISH!")
         ),
 
         ...activeLanes.map((l, i) => h("div", {key:i, style:{position:"absolute",top:0,bottom:0,left:(i/activeLanes.length*100)+"%",width:(100/activeLanes.length)+"%",borderRight:i<activeLanes.length-1?"1px solid #1a0035":"none"}},
-          h("div", {ref: el => laneColRefs.current[i] = el, style:{position:"absolute",inset:0,pointerEvents:"none",background:`linear-gradient(180deg,transparent 60%,${l.glow} 100%)`,opacity:0}})
+          h("div", {ref: el => laneColRefs.current[i] = el, style:{position:"absolute",inset:0,pointerEvents:"none",background:`linear-gradient(180deg,${l.color}00 0%,${l.color}55 22%,${l.color}b0 55%,${l.color}f0 100%)`,boxShadow:`inset 0 0 40px 6px ${l.color}aa`,opacity:0}})
         )),
 
         h("div", {style:{position:"absolute",inset:0,pointerEvents:"none",backgroundImage:"linear-gradient(0deg,rgba(100,0,200,0.05) 1px,transparent 1px)",backgroundSize:"100% 40px",animation:`scrollGrid ${ (60 / track.bpm) }s linear infinite`}}),
@@ -2305,7 +2520,7 @@ function PopnGame() {
           h("div", {ref: fxLayerRefP, style:{position:"absolute",inset:0,zIndex:70,pointerEvents:"none"}}),
 
           ...LANES_VS.map((l, i) => h("div", {key:i, style:{position:"absolute",top:0,bottom:0,left:(i*laneW)+"%",width:laneW+"%",borderRight:i<2?"1px solid #1a0035":"none"}},
-            h("div", {ref: el => laneColRefs.current[i] = el, style:{position:"absolute",inset:0,pointerEvents:"none",background:`linear-gradient(180deg,transparent 60%,${l.glow} 100%)`,opacity:0}})
+            h("div", {ref: el => laneColRefs.current[i] = el, style:{position:"absolute",inset:0,pointerEvents:"none",background:`linear-gradient(180deg,${l.color}00 0%,${l.color}55 22%,${l.color}b0 55%,${l.color}f0 100%)`,boxShadow:`inset 0 0 40px 6px ${l.color}aa`,opacity:0}})
           )),
 
           ...myNotes.map(note => {
@@ -2378,6 +2593,12 @@ function PopnGame() {
       vsCdText && h("div", {style:{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:200,fontSize:"2.2rem",fontWeight:900,color:"#fff",textShadow:"0 0 30px #FFD600",pointerEvents:"none"}}, vsCdText),
       h("div", {style:{position:"absolute",top:0,bottom:0,left:"50%",width:2,background:"linear-gradient(180deg,transparent,#FFD600,transparent)",zIndex:50,pointerEvents:"none"}}),
 
+      // 最後のノーツが消えたら、すぐリザルトへ行かずプレイ画面に「FINISH!」を重ねて表示
+      showFinishVs && h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",zIndex:210,pointerEvents:"none",overflow:"hidden"}},
+        h("div", {style:{position:"absolute",top:0,left:0,width:"100%",height:"100%",background:"rgba(10,0,20,0.45)",animation:"resultFadeIn 0.3s ease both"}}),
+        h("div", {style:{position:"relative",fontSize:"clamp(1.6rem,9vw,3.2rem)",fontWeight:900,letterSpacing:3,background:"linear-gradient(180deg,#fff8d8,#FFD600 45%,#FF8C00 55%,#fff8d8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 12px #FFD600cc) drop-shadow(0 3px 2px #4a2a00)",animation:"finishPop 0.9s cubic-bezier(.34,1.56,.64,1) both"}}, "FINISH!")
+      ),
+
       // 2P（右側・向かい合う相手から見て正しい向きになるよう180度回転）
       h("div", {style:{flex:1,minWidth:0,display:"flex",height:"100%",transform:"rotate(180deg)"}}, renderHalf(2))
     );
@@ -2393,7 +2614,8 @@ function PopnGame() {
     const p1Win = finalScoreP1 > finalScoreP2;
     const p2Win = finalScoreP2 > finalScoreP1;
     const draw  = finalScoreP1 === finalScoreP2;
-    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",padding:"20px 0",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)"}},
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",padding:"20px 0",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",position:"relative"}},
+      vsRevealStep>=5 && h(Confetti, {count:19}),
       vsRevealStep>=5 && h("div", {style:{fontSize:"clamp(1.8rem,8vw,3rem)",fontWeight:900,letterSpacing:4,color:"#FFD600",filter:"drop-shadow(0 0 20px #FFD600aa)",marginBottom:vsPenaltyEnabled && !draw && vsPenalty.trim() ? 10 : 24,textAlign:"center",animation:"resultFadeIn 0.6s ease"}},
         draw ? "DRAW!" : (p1Win ? `${vsNameP1.trim()||"1P"} WIN!` : `${vsNameP2.trim()||"2P"} WIN!`)
       ),
@@ -2450,7 +2672,8 @@ function PopnGame() {
   // ================================================================
   if (gs === "stage_result") {
     const curRes = history[history.length - 1] || {};
-    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",padding:"10px 0"}},
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"auto",backgroundImage:"radial-gradient(ellipse at 50% 0%,#1a0035 0%,#0a0010 70%)",padding:"10px 0",position:"relative"}},
+      resultRevealed && h(Confetti, {count:19}),
       resultRevealed && charSprites[0] && h("div", {style:{marginTop:8,marginBottom:10,animation:"resultFadeIn 0.6s ease"}},
         h("img", {src:charSprites[0], style:{width:"144px",height:"144px",objectFit:"contain",animation:"charDance 1.5s ease-in-out infinite",transformOrigin:"bottom center"}})
       ),
@@ -2495,7 +2718,8 @@ function PopnGame() {
   // ================================================================
   if (gs === "final_result") {
     const totalScore = history.reduce((a,c)=>a+c.score, 0);
-    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",overflow:"auto",padding:"36px 0 20px"}},
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",overflow:"auto",padding:"36px 0 20px",position:"relative"}},
+      resultRevealed && h(Confetti, {count:19}),
       resultRevealed && h("div", {style:{fontSize:"clamp(1.44rem,6.6vw,2.52rem)",fontWeight:900,color:"#FFD600",textShadow:"0 0 20px #FFD600aa",letterSpacing:3,marginBottom:2,textAlign:"center",padding:"0 5vw",animation:"resultFadeIn 0.6s ease"}}, "CONGRATULATION!"),
       resultRevealed && h("img", {
         src: "images/final_char_bg.png", 
