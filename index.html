@@ -641,6 +641,47 @@ function Confetti({ count = 50 }) {
 }
 
 // ================================================================
+// 🧑‍🎤 2P対戦：プレイヤーが選べるキャラクター一覧
+// ── 画像の指定方法は2通り ──
+//   ① GitHubにアップロードした画像の「Raw」URL（https://raw.githubusercontent.com/...）を img に指定
+//   ② 画像そのものをこのファイルに埋め込む（data:image/png;base64,... 形式）
+//      → 埋め込み済みなら外部URLへのアクセスが要らず、そのまま確実に表示されます（下の「うめきち」が実例）
+// 画像URLが未設定・読み込み失敗の場合は、色付きの丸＋頭文字で自動的に代替表示されます。
+// ================================================================
+const CHARACTERS = [
+  { id:"umekichi", name:"うめきち", color:"#8B5A2B", img:"https://raw.githubusercontent.com/shobonneko1992-alt/pop/main/images/umekichi_transparent.png" },
+  { id:"miku", name:"みく", color:"#D4A5A5", img:"https://raw.githubusercontent.com/shobonneko1992-alt/pop/main/images/miku_transparent.png" },
+  { id:"yukimi", name:"ゆきみ", color:"#F5D485", img:"https://raw.githubusercontent.com/shobonneko1992-alt/pop/main/images/yukimi_transparent.png" },
+  { id:"mimi",  name:"ミミ",      color:"#FF3FA4", img:"https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/characters/mimi.png" },
+  { id:"rie",   name:"リエちゃん", color:"#00E5FF", img:"https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/characters/rie.png" },
+  { id:"kenji", name:"ケンジ",    color:"#FFD600", img:"https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/characters/kenji.png" },
+  { id:"nana",  name:"ナナ",      color:"#69FF47", img:"https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/characters/nana.png" },
+];
+function getCharacter(id) {
+  return CHARACTERS.find(c => c.id === id) || CHARACTERS[0];
+}
+// 丸いキャラクターアバター。画像が無い/読み込み失敗した場合はイニシャル入りの色付き円で代替する。
+function CharacterAvatar({ charId, size = 40, selected = false, ringColor, onClick }) {
+  const [broken, setBroken] = useState(false);
+  const c = getCharacter(charId);
+  return h("div", {
+    onClick,
+    style:{
+      width:size, height:size, borderRadius:"50%", flexShrink:0, cursor: onClick ? "pointer" : "default",
+      border:`2px solid ${selected ? (ringColor || c.color) : "#330066"}`,
+      boxShadow: selected ? `0 0 12px ${(ringColor || c.color)}aa` : "none",
+      overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center",
+      background: broken || !c.img ? c.color : "#150030",
+      transition:"border-color 0.2s, box-shadow 0.2s",
+    }
+  },
+    (!broken && c.img)
+      ? h("img", {src:c.img, alt:c.name, onError:() => setBroken(true), style:{width:"100%",height:"100%",objectFit:"cover"}})
+      : h("span", {style:{color:"#fff",fontWeight:900,fontSize:size*0.4}}, c.name.slice(0,1))
+  );
+}
+
+// ================================================================
 // メインコンポーネント
 // ================================================================
 function PopnGame() {
@@ -685,6 +726,8 @@ function PopnGame() {
   const [vsButtonLayout, setVsButtonLayout] = useState("vertical"); // "vertical" | "horizontal"
   const [vsNameP1, setVsNameP1] = useState("");
   const [vsNameP2, setVsNameP2] = useState("");
+  const [charP1, setCharP1] = useState(CHARACTERS[0].id);
+  const [charP2, setCharP2] = useState(CHARACTERS[1] ? CHARACTERS[1].id : CHARACTERS[0].id);
   const [vsPenalty, setVsPenalty] = useState("");
   const [vsPenaltyEnabled, setVsPenaltyEnabled] = useState(false);
 
@@ -1905,23 +1948,31 @@ function PopnGame() {
       // PLAYER NAME
       h("div", {style:{marginBottom:22, background:"rgba(0,0,0,0.4)", padding:"18px 20px", borderRadius:"16px", border:"1px solid #330066"}},
         h("div", {style:{color:"#8855bb",fontSize:11,letterSpacing:3,marginBottom:12}}, "PLAYER NAME"),
-        h("div", {style:{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center"}},
-          h("div", {style:{display:"flex",alignItems:"center",gap:8}},
-            h("span", {style:{color:"#FF3FA4",fontSize:12,fontWeight:900}}, "1P"),
-            h("input", {
-              type:"text", value: vsNameP1, maxLength: 8, placeholder:"1P",
-              onChange: e => setVsNameP1(e.target.value),
-              style:{width:110, padding:"8px 12px", borderRadius:10, border:"1px solid #FF3FA4", background:"#050008", color:"#fff", fontSize:13, textAlign:"center"}
-            })
-          ),
-          h("div", {style:{display:"flex",alignItems:"center",gap:8}},
-            h("span", {style:{color:"#00E5FF",fontSize:12,fontWeight:900}}, "2P"),
-            h("input", {
-              type:"text", value: vsNameP2, maxLength: 8, placeholder:"2P",
-              onChange: e => setVsNameP2(e.target.value),
-              style:{width:110, padding:"8px 12px", borderRadius:10, border:"1px solid #00E5FF", background:"#050008", color:"#fff", fontSize:13, textAlign:"center"}
-            })
-          )
+        h("div", {style:{display:"flex",gap:20,flexWrap:"wrap",justifyContent:"center"}},
+          [1,2].map(p => {
+            const accent = p===1 ? "#FF3FA4" : "#00E5FF";
+            const nameVal = p===1 ? vsNameP1 : vsNameP2;
+            const setName = p===1 ? setVsNameP1 : setVsNameP2;
+            const charVal = p===1 ? charP1 : charP2;
+            const setChar = p===1 ? setCharP1 : setCharP2;
+            return h("div", {key:p, style:{display:"flex",flexDirection:"column",alignItems:"center",gap:10}},
+              h("div", {style:{display:"flex",alignItems:"center",gap:8}},
+                h("span", {style:{color:accent,fontSize:12,fontWeight:900}}, p===1?"1P":"2P"),
+                h("input", {
+                  type:"text", value: nameVal, maxLength: 8, placeholder: p===1?"1P":"2P",
+                  onChange: e => setName(e.target.value),
+                  style:{width:110, padding:"8px 12px", borderRadius:10, border:`1px solid ${accent}`, background:"#050008", color:"#fff", fontSize:13, textAlign:"center"}
+                })
+              ),
+              // キャラクター選択
+              h("div", {style:{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center",maxWidth:180}},
+                CHARACTERS.map(c => h(CharacterAvatar, {
+                  key:c.id, charId:c.id, size:38, selected: charVal===c.id, ringColor: accent,
+                  onClick: () => { setChar(c.id); setName(c.name); }
+                }))
+              )
+            );
+          })
         )
       ),
 
@@ -2504,11 +2555,12 @@ function PopnGame() {
       return h("div", {style:{flex:1,minWidth:0,display:"flex",flexDirection:"column",background:"#0a0010",height:"100%"}},
         // ミニHUD（HPゲージなし。曲は最後まで止まらない）
         h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",padding:"8px 8px 4px",flexShrink:0,gap:2}},
-          h("div", {style:{color:player===1?"#FF3FA4":"#00E5FF",fontSize:9,letterSpacing:2,fontWeight:900,whiteSpace:"nowrap",maxWidth:"90%",overflow:"hidden",textOverflow:"ellipsis"}}, (player===1 ? (vsNameP1.trim()||"1P") : (vsNameP2.trim()||"2P"))),
+          h(CharacterAvatar, {charId: player===1?charP1:charP2, size:40}),
+          h("div", {style:{color:player===1?"#FF3FA4":"#00E5FF",fontSize:13.5,letterSpacing:2,fontWeight:900,whiteSpace:"nowrap",maxWidth:"90%",overflow:"hidden",textOverflow:"ellipsis"}}, (player===1 ? (vsNameP1.trim()||"1P") : (vsNameP2.trim()||"2P"))),
           (() => {
             const remainingSec = vsSongDurationRef.current - vsTimer;
             const scoreHidden = vsTimer > 0 && remainingSec <= 15 && remainingSec > -3;
-            return h("div", {style:{color:scoreHidden?"#FFD600":(score<0?"#FF3FA4":"#fff"),fontSize:"clamp(13px,4vw,20px)",fontWeight:800,fontFamily:"monospace"}},
+            return h("div", {style:{color:scoreHidden?"#FFD600":(score<0?"#FF3FA4":"#fff"),fontSize:"clamp(19.5px,6vw,30px)",fontWeight:800,fontFamily:"monospace"}},
               scoreHidden ? "??????" : (score < 0 ? score.toLocaleString() : score.toLocaleString().padStart(6,"0"))
             );
           })(),
@@ -2633,7 +2685,10 @@ function PopnGame() {
           const win = p===1 ? p1Win : p2Win;
           const rowStyle = {fontSize:16.5,minHeight:22};
           return h("div", {key:p, style:{flex:1,textAlign:"center",background:"rgba(10,0,20,0.92)",borderRadius:18,border:`1px solid ${vsRevealStep>=5 && win?"#FFD600":"#330066"}`,padding:"18px 12px",boxShadow:vsRevealStep>=5 && win?"0 0 30px #FFD60066":"none",transition:"border-color 0.4s,box-shadow 0.4s"}},
-            h("div", {style:{fontSize:16.5,letterSpacing:2,color:p===1?"#FF3FA4":"#00E5FF",fontWeight:900,marginBottom:10,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}, (p===1 ? (vsNameP1.trim()||"1P") : (vsNameP2.trim()||"2P"))),
+            h("div", {style:{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:10}},
+              h(CharacterAvatar, {charId: p===1?charP1:charP2, size:26}),
+              h("div", {style:{fontSize:16.5,letterSpacing:2,color:p===1?"#FF3FA4":"#00E5FF",fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}, (p===1 ? (vsNameP1.trim()||"1P") : (vsNameP2.trim()||"2P")))
+            ),
             h("div", {style:{fontSize:"clamp(1.5rem,6.25vw,2.125rem)",fontWeight:900,color:"#fff",fontFamily:"monospace",marginBottom:12,minHeight:"1.4em"}},
               vsRevealStep>=4 ? h(AnimatedScore, {value: sc, duration: 2500}) : "?????"
             ),
