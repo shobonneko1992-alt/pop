@@ -2361,6 +2361,18 @@ function PopnGame() {
 
     h("div", {style:{color:"#8855bb",fontSize:13,letterSpacing:6,marginBottom:20,animation:"resultFadeIn 0.5s ease"}}, songIntro.vs ? "VS MATCH — NOW LOADING" : "NOW LOADING"),
 
+    songIntro.vs && h("div", {style:{display:"flex",alignItems:"center",justifyContent:"center",gap:16,marginBottom:26,animation:"resultFadeIn 0.6s ease"}},
+      h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:8}},
+        h(CharacterAvatar, {charId:charP1, size:76, selected:true, ringColor:"#FF3FA4"}),
+        h("div", {style:{color:"#FF3FA4",fontSize:13,fontWeight:900,letterSpacing:1,maxWidth:96,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}, vsNameP1.trim()||"1P")
+      ),
+      h("div", {style:{fontSize:"1.7rem",fontWeight:900,fontStyle:"italic",color:"#FFD600",textShadow:"0 0 16px #FFD600cc, 0 0 30px #FF3FA466",padding:"0 2px"}}, "VS"),
+      h("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:8}},
+        h(CharacterAvatar, {charId:charP2, size:76, selected:true, ringColor:"#00E5FF"}),
+        h("div", {style:{color:"#00E5FF",fontSize:13,fontWeight:900,letterSpacing:1,maxWidth:96,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}, vsNameP2.trim()||"2P")
+      )
+    ),
+
     h("div", {style:{fontSize:"clamp(1.3rem,7vw,2.4rem)",fontWeight:900,letterSpacing:2,textAlign:"center",padding:"0 8vw",maxWidth:"100%",wordBreak:"break-word",background:"linear-gradient(90deg,#FF3FA4,#FFD600,#00E5FF,#69FF47,#FF3FA4)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",filter:"drop-shadow(0 0 16px #FF3FA466)",animation:"rainbowMove 2.2s linear infinite, resultFadeIn 0.6s ease"}}, `♪ ${songIntro.title}`),
 
     h("div", {style:{color:"#666",fontSize:12,letterSpacing:2,marginTop:14,marginBottom:40}}, songIntro.vs ? `2P対戦  LV.${songIntro.lv}  SPEED x${songIntro.sp}` : `${songIntro.m}  LV.${songIntro.lv}  SPEED x${songIntro.sp}`),
