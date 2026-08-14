@@ -2724,13 +2724,13 @@ function PopnGame() {
         h("img", {
           src: resolveResultPoseImg(charP1, draw || p1Win),
           alt: (draw || p1Win) ? "WIN" : "LOSE",
-          style:{maxHeight:130,maxWidth:"45%",objectFit:"contain",filter: (draw||p1Win) ? "drop-shadow(0 0 16px #FFD600aa)" : "grayscale(0.3) opacity(0.8)"},
+          style:{maxHeight:97.5,maxWidth:"33.75%",objectFit:"contain",filter: (draw||p1Win) ? "drop-shadow(0 0 16px #FFD600aa)" : "grayscale(0.3) opacity(0.8)"},
           onError: e => { e.target.style.display = "none"; }
         }),
         h("img", {
           src: resolveResultPoseImg(charP2, draw || p2Win),
           alt: (draw || p2Win) ? "WIN" : "LOSE",
-          style:{maxHeight:130,maxWidth:"45%",objectFit:"contain",filter: (draw||p2Win) ? "drop-shadow(0 0 16px #FFD600aa)" : "grayscale(0.3) opacity(0.8)"},
+          style:{maxHeight:97.5,maxWidth:"33.75%",objectFit:"contain",filter: (draw||p2Win) ? "drop-shadow(0 0 16px #FFD600aa)" : "grayscale(0.3) opacity(0.8)"},
           onError: e => { e.target.style.display = "none"; }
         })
       ),
