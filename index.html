@@ -660,6 +660,41 @@ const CHARACTERS = [
 function getCharacter(id) {
   return CHARACTERS.find(c => c.id === id) || CHARACTERS[0];
 }
+
+// ================================================================
+// 🏆 対戦リザルト：キャラクターごとの「勝ち」「負け」ポーズ画像
+// ── 画像が届いたキャラクターから順に win / lose を埋めてください ──
+//   例: rie: { win:"https://raw.githubusercontent.com/.../rie_win.png", lose:"https://raw.githubusercontent.com/.../rie_lose.png" }
+// 該当キャラクターの画像が未設定の場合は、汎用の DEFAULT_WIN_LOSE 画像 → それも無ければ
+// 通常のキャラクターアバター画像、の順に自動でフォールバックします。
+// ================================================================
+const CHAR_POSES = {
+  yukimi: {
+    win: "https://raw.githubusercontent.com/shobonneko1992-alt/pop/main/images/yukimi_win.png",
+    lose: "https://raw.githubusercontent.com/shobonneko1992-alt/pop/main/images/yukimi_lose.png",
+  },
+  umekichi: {
+    win: "https://raw.githubusercontent.com/shobonneko1992-alt/pop/main/images/umekichi_win.png",
+    lose: "https://raw.githubusercontent.com/shobonneko1992-alt/pop/main/images/umekichi_lose.png",
+  },
+  miku: {
+    win: "https://raw.githubusercontent.com/shobonneko1992-alt/pop/main/images/miku_win.png",
+    lose: "https://raw.githubusercontent.com/shobonneko1992-alt/pop/main/images/miku_lose.png",
+  },
+};
+const DEFAULT_WIN_LOSE_IMAGES = {
+  win:  null,
+  lose: null,
+};
+// 勝敗結果に応じて表示すべき画像URLを解決する（キャラ専用 → 汎用 → 通常アバターの順）
+function resolveResultPoseImg(charId, isWin) {
+  const poses = CHAR_POSES[charId];
+  const specific = poses ? (isWin ? poses.win : poses.lose) : null;
+  if (specific) return specific;
+  const fallback = isWin ? DEFAULT_WIN_LOSE_IMAGES.win : DEFAULT_WIN_LOSE_IMAGES.lose;
+  if (fallback) return fallback;
+  return getCharacter(charId).img; // 最終フォールバック：通常のアバター画像
+}
 // 丸いキャラクターアバター。画像が無い/読み込み失敗した場合はイニシャル入りの色付き円で代替する。
 function CharacterAvatar({ charId, size = 40, selected = false, ringColor, onClick }) {
   const [broken, setBroken] = useState(false);
@@ -2682,6 +2717,22 @@ function PopnGame() {
       vsRevealStep>=5 && h(Confetti, {count:19}),
       vsRevealStep>=5 && h("div", {style:{fontSize:"clamp(1.8rem,8vw,3rem)",fontWeight:900,letterSpacing:4,color:"#FFD600",filter:"drop-shadow(0 0 20px #FFD600aa)",marginBottom:vsPenaltyEnabled && !draw && vsPenalty.trim() ? 10 : 24,textAlign:"center",animation:"resultFadeIn 0.6s ease"}},
         draw ? "DRAW!" : (p1Win ? `${vsNameP1.trim()||"1P"} WIN!` : `${vsNameP2.trim()||"2P"} WIN!`)
+      ),
+
+      // WINテロップとスコアパネルの間：各プレイヤーが選んだキャラクターの「勝ち」「負け」ポーズを表示
+      vsRevealStep>=5 && h("div", {style:{display:"flex",justifyContent:"space-around",alignItems:"flex-end",width:"92%",maxWidth:480,height:130,flexShrink:0,animation:"resultFadeIn 0.6s ease"}},
+        h("img", {
+          src: resolveResultPoseImg(charP1, draw || p1Win),
+          alt: (draw || p1Win) ? "WIN" : "LOSE",
+          style:{maxHeight:130,maxWidth:"45%",objectFit:"contain",filter: (draw||p1Win) ? "drop-shadow(0 0 16px #FFD600aa)" : "grayscale(0.3) opacity(0.8)"},
+          onError: e => { e.target.style.display = "none"; }
+        }),
+        h("img", {
+          src: resolveResultPoseImg(charP2, draw || p2Win),
+          alt: (draw || p2Win) ? "WIN" : "LOSE",
+          style:{maxHeight:130,maxWidth:"45%",objectFit:"contain",filter: (draw||p2Win) ? "drop-shadow(0 0 16px #FFD600aa)" : "grayscale(0.3) opacity(0.8)"},
+          onError: e => { e.target.style.display = "none"; }
+        })
       ),
 
       vsRevealStep>=5 && vsPenaltyEnabled && !draw && vsPenalty.trim() && h("div", {style:{marginBottom:24,textAlign:"center",animation:"resultFadeIn 0.6s ease 0.15s both"}},
