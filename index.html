@@ -2664,34 +2664,50 @@ function PopnGame() {
         ),
 
         // ボタン（3つ・vsButtonLayoutで縦並び/横並びを切り替え）
-        h("div", {style:{display:"flex",flexDirection:vsButtonLayout==="vertical"?"column":"row",gap:5,padding:"0 6px calc(8px + env(safe-area-inset-bottom))",flexShrink:0}},
-          LANES_VS.map((l, i) => h("div", {
-            key:i, ref: el => laneRefs.current[i] = el,
-            onPointerDown: (e) => {
-              e.preventDefault();
-              vsSetLanePressedVisual(player, i, true);
-              handleHitVs(player, i);
-              if (pressTidRef.current[i]) clearTimeout(pressTidRef.current[i]);
-              pressTidRef.current[i] = setTimeout(() => vsReleaseLane(player, i), 180);
+        // 見た目のボタン（内側）とは別に、隙間なく画面端まで届く「タッチ判定用ラッパー」を設ける。
+        // 以前はボタン間の隙間(gap)や画面端の余白がタッチを受けない死に領域になっており、
+        // 特に画面の左端に近い1Pの一番左ボタンは、端寄りをタップすると反応しない／
+        // OSの端スワイプジェスチャーに奪われることがあった。
+        h("div", {style:{display:"flex",flexDirection:vsButtonLayout==="vertical"?"column":"row",padding:"0 0 calc(8px + env(safe-area-inset-bottom))",flexShrink:0,touchAction:"none"}},
+          LANES_VS.map((l, i) => {
+            const isFirst = i === 0, isLast = i === LANES_VS.length - 1;
+            const EDGE = 16; // 画面の外周側に確保する見た目の余白(px)。この余白部分もタッチ判定に含める
+            const wrapPad = vsButtonLayout==="vertical"
+              ? `3px max(${EDGE}px, env(safe-area-inset-left)) 3px max(${EDGE}px, env(safe-area-inset-right))`
+              : `0 ${isLast ? `max(${EDGE}px, env(safe-area-inset-right))` : "3px"} 0 ${isFirst ? `max(${EDGE}px, env(safe-area-inset-left))` : "3px"}`;
+            return h("div", {
+              key:i,
+              onPointerDown: (e) => {
+                e.preventDefault();
+                vsSetLanePressedVisual(player, i, true);
+                handleHitVs(player, i);
+                if (pressTidRef.current[i]) clearTimeout(pressTidRef.current[i]);
+                pressTidRef.current[i] = setTimeout(() => vsReleaseLane(player, i), 180);
+              },
+              onPointerUp:     () => vsReleaseLane(player, i),
+              onPointerLeave:  () => vsReleaseLane(player, i),
+              onPointerCancel: () => vsReleaseLane(player, i),
+              onTouchEnd:      () => vsReleaseLane(player, i),
+              onTouchCancel:   () => vsReleaseLane(player, i),
+              onMouseUp:       () => vsReleaseLane(player, i),
+              onMouseLeave:    () => vsReleaseLane(player, i),
+              style: vsButtonLayout==="vertical"
+                ? {height:"clamp(50px,calc(9vh + 6px),74px)",padding:wrapPad,userSelect:"none",WebkitUserSelect:"none",WebkitTouchCallout:"none",WebkitTapHighlightColor:"transparent",touchAction:"none"}
+                : {flex:1,minWidth:0,height:"clamp(52px,11vh,84px)",padding:wrapPad,userSelect:"none",WebkitUserSelect:"none",WebkitTouchCallout:"none",WebkitTapHighlightColor:"transparent",touchAction:"none"}
             },
-            onPointerUp:     () => vsReleaseLane(player, i),
-            onPointerLeave:  () => vsReleaseLane(player, i),
-            onPointerCancel: () => vsReleaseLane(player, i),
-            onTouchEnd:      () => vsReleaseLane(player, i),
-            onTouchCancel:   () => vsReleaseLane(player, i),
-            onMouseUp:       () => vsReleaseLane(player, i),
-            onMouseLeave:    () => vsReleaseLane(player, i),
-            style: vsButtonLayout==="vertical"
-              ? {height:"clamp(44px,9vh,68px)",borderRadius:10,background:`radial-gradient(circle at 50% 30%,${l.color}88,${l.color}33)`,border:`2px solid ${l.color}`,boxShadow:`0 0 8px ${l.color}55`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transform:"scale(1)",transition:"transform 0.06s,box-shadow 0.06s,background 0.06s",userSelect:"none",WebkitUserSelect:"none",touchAction:"none"}
-              : {flex:1,height:"clamp(52px,11vh,84px)",borderRadius:10,background:`radial-gradient(circle at 50% 30%,${l.color}88,${l.color}33)`,border:`2px solid ${l.color}`,boxShadow:`0 0 8px ${l.color}55`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transform:"scale(1)",transition:"transform 0.06s,box-shadow 0.06s,background 0.06s",userSelect:"none",WebkitUserSelect:"none",touchAction:"none"}
-          },
-            h("div", {style:{width:"clamp(16px,4vw,26px)",height:"clamp(16px,4vw,26px)",borderRadius:"50%",background:l.color,boxShadow:`0 0 6px ${l.color}`}})
-          ))
+              h("div", {
+                ref: el => laneRefs.current[i] = el,
+                style:{width:"100%",height:"100%",borderRadius:10,background:`radial-gradient(circle at 50% 30%,${l.color}88,${l.color}33)`,border:`2px solid ${l.color}`,boxShadow:`0 0 8px ${l.color}55`,display:"flex",alignItems:"center",justifyContent:"center",transform:"scale(1)",transition:"transform 0.06s,box-shadow 0.06s,background 0.06s",pointerEvents:"none"}
+              },
+                h("div", {style:{width:"clamp(16px,4vw,26px)",height:"clamp(16px,4vw,26px)",borderRadius:"50%",background:l.color,boxShadow:`0 0 6px ${l.color}`}})
+              )
+            );
+          })
         )
       );
     };
 
-    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"row",overflow:"hidden",position:"relative"}},
+    return h("div", {style:{width:"100%",height:"var(--app-h)",background:"#0a0010",display:"flex",flexDirection:"row",overflow:"hidden",position:"relative",touchAction:"none",overscrollBehavior:"none",WebkitTouchCallout:"none",WebkitTapHighlightColor:"transparent"}},
       // 1P（左側・通常向き）
       h("div", {style:{flex:1,minWidth:0,display:"flex",height:"100%"}}, renderHalf(1)),
 
